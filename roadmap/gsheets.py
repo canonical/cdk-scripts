@@ -1,7 +1,7 @@
 import gspread
 import gspread_formatting
 import pandas as pd
-from roadmap.feature import RoadmapFeature
+from roadmap.feature import FeedbackFeature, RoadmapFeature
 from roadmap.logging import Logger
 
 
@@ -117,3 +117,46 @@ class Roadmap:
             self.logger.debug(f"A1: {a1}")
         self._ws.batch_update(value_updates)
         gspread_formatting.format_cell_ranges(self._ws, format_updates)
+        self._df = None
+
+
+class ProductFeedback:
+    def __init__(self, key, product):
+        self.logger = Logger()
+        self._client = gspread.oauth()
+        self._sh = self._client.open_by_key(key)
+        self._product = product
+        self._ws = self._sh.worksheet(product)
+        self._df = None
+
+    @property
+    def df(self):
+        if self._df is not None:
+            return self._df
+        df = pd.DataFrame(
+            self._ws.get_all_records(),
+            dtype="string",
+        )
+        # df.columns = df.loc[0, :].tolist()
+        # df.columns.values[0] = "Labels"
+        df.set_index("Title", inplace=True, drop=False)
+        self._df = df
+        return df
+
+    @property
+    def all_features(self):
+        """Return all feedback features"""
+        features = []
+        for feature in self.df.to_dict('records'):
+            features.append(FeedbackFeature(self._product, feature))
+        return features
+
+    @property
+    def named_features(self):
+        """Return only features with a name"""
+        # TODO: Test or remove this, is it useful?
+        features = []
+        for feature in self.df.to_dict('records'):
+            features.append(FeedbackFeature(self._product, feature))
+        features = filter(lambda x: x.name, features)
+        return features

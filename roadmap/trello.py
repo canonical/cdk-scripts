@@ -1,32 +1,90 @@
 from functools import lru_cache
 
-from roadmap.feature import TrelloFeature, FeatureStatus
+from roadmap.feature import FeatureStatus, TrelloFeature
 from roadmap.logging import Logger
 from trello import TrelloClient
 
 cache = lru_cache(maxsize=None)
 
 
-class TeamBoard:
+class TrelloBoard:
     def __init__(self, client, name=None, id=None):
         if not name and not id:
             raise ValueError("Either a board name or id must be provided")
         self.id = id
         self.name = name
-        self.client = client
+        self._client = client
         self.logger = Logger()
-        self.board = self._get_board()
 
-    def _get_board(self):
+    @property
+    def _board(self):
         if self.id:
-            return self.client.get_board(self.id)
+            return self._client.get_board(self.id)
 
-        all_boards = self.client.list_boards()
+        all_boards = self._client.list_boards()
         for board in all_boards:
             if board.name.lower() == self.name.lower():
                 self.id = board.id
                 return board
         raise ValueError(f"Board {self.name} not in {all_boards}")
+
+    @property
+    def _card_names(self):
+        all_cards = self._board.all_cards()
+        card_names = [card.name for card in all_cards]
+        return card_names
+
+    def _missing_cards(self, desired_cards):
+        card_names = self._card_names
+        missing_cards = [name for name in desired_cards if name not in card_names]
+        return missing_cards
+
+
+class FeedbackBoard(TrelloBoard):
+    def __init__(self, *args, sizes=[1, 2, 3, 5, 8, 13, 21, 34], **kwargs):
+        super().__init__(*args, **kwargs)
+        self._sizes = sizes
+
+    def setup_lists(self):
+        all_lists = self._board.all_lists()
+        list_names = [list.name for list in all_lists]
+        desired_lists = ["Unsized"]
+        desired_lists.extend([f"Size {n}" for n in self._sizes])
+        missing_lists = [name for name in desired_lists if name not in list_names]
+        for name in missing_lists:
+            self._board.add_list(name, pos="bottom")
+
+    def add_cards(self, product_feedback, update_description=False, update_bugs=True):
+        """Add missing cards"""
+        all_lists = self._board.all_lists()
+        all_cards = self._board.all_cards()
+        card_names = [card.name for card in all_cards]
+        for feedback in product_feedback:
+            if feedback.name not in card_names:
+                # New card
+                if feedback.story_points:
+                    list_name = f"Size {feedback.story_points}"
+                else:
+                    list_name = f"Unsized"
+                tlist = [lst for lst in all_lists if lst.name == list_name][0]
+                self.logger.debug(f"Feature Size: {feedback.story_points}")
+                self.logger.debug(f"Found List: {tlist}")
+                card = tlist.add_card(name=feedback.name, desc=feedback.description)
+                for bug in feedback.bugs:
+                    card.attach(url=bug)
+            elif update_description or update_bugs:
+                # Existing card
+                card = [card for card in all_cards if card.name == feedback.name][0]
+                if update_description and card.description != feedback.description:
+                    card.set_description(feedback.description)
+                if update_bugs and feedback.bugs:
+                    attachments = card.attachments
+                    for bug in feedback.bugs:
+                        if bug not in [a['url'] for a in attachments]:
+                            card.attach(url=bug)
+
+    def get_features(self):
+        pass
 
 
 class Utils:
