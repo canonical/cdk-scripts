@@ -148,17 +148,21 @@ class ScrumBoard(TrelloBoard):
         """Create A new release list"""
         pos = None
         all_lists = self._board.all_lists()
+        list_present = False
         for lst in all_lists:
             if release == lst.name:
-                # Already exists
-                return
-        for lst in all_lists:
-            if self.IN_PROGRESS_LIST.lower() == lst.name.lower():
-                pos = lst.pos - 1
-                break
-        self._board.add_list(release, pos)
+                list_present = True
+        if not list_present:
+            for lst in all_lists:
+                if self.IN_PROGRESS_LIST.lower() == lst.name.lower():
+                    pos = lst.pos - 1
+                    break
+            self._board.add_list(release, pos)
+            self._lists = None  # Clear cache
+
         for color in self.RELEASE_COLORS:
             self._board.add_label(release, color)
+        self._labels = None  # Clear cache
 
     def create_cards(self, roadmap_features):
         """Create cards for a list of roadmap features"""
@@ -192,6 +196,13 @@ class ScrumBoard(TrelloBoard):
             ][0]
             for card in self.cards:
                 if card.name == feature.name:
+                    try:
+                        next(
+                            filter(lambda x: x.name == release_label.name, card.labels)
+                        )
+                        continue
+                    except StopIteration:
+                        pass
                     card.add_label(release_label)
 
     def get_release_features(self, release, only_visible=True):
@@ -206,6 +217,8 @@ class ScrumBoard(TrelloBoard):
 
         features = []
         for card in cards:
+            if not card.labels:
+                continue
             in_release = False
             for label in card.labels:
                 if label.id in release_ids:
@@ -219,13 +232,39 @@ class ScrumBoard(TrelloBoard):
     def get_card_status(self, card, release):
         lst = next(filter(lambda x: x.id == card.list_id, self.lists))
         status = FeatureStatus()
-        if lst.name.lower() == self.DONE_LIST:
+        if lst.name == self.DONE_LIST:
             status.done()
         elif lst.name != release:
-            # TODO: Check sub-cards, tasks, etc
             status.started()
-        label = next(filter(lambda x: x.name == release, card.labels))
-        status.set_color(label.color)
+        else:
+            # Set started if checklist has completed items
+            for chklst in card.checklists:
+                for item in chklst.items:
+                    if item["checked"]:
+                        status.started()
+            # Set started if an attached card *on this board* has started
+            for attachment in card.get_attachments():
+                if attachment.is_upload:
+                    continue
+                self.logger.debug(f"Searching: {attachment.url}")
+                try:
+                    subcard = next(
+                        filter(lambda x: x.url == attachment.url, self.cards)
+                    )
+                except StopIteration:
+                    # Card not found on this board
+                    self.logger.debug(f"Attachment not card on this board board")
+                    continue
+                substatus = self.get_card_status(subcard, release)
+                self.logger.debug(f"SubStatus: {substatus}")
+                if substatus != substatus.NOT_STARTED:
+                    status.started()
+        try:
+            label = next(filter(lambda x: x.name == release, card.labels))
+            status.set_color(label.color)
+        except TypeError:
+            # Don't set color if there is no release label
+            pass
         return status
 
 
@@ -264,6 +303,9 @@ class FeatureStatus:
 
     def done(self):
         self._state = self.DONE
+
+    def __repr__(self):
+        return f"{self.state}:{self.color}"
 
 
 class Utils:
