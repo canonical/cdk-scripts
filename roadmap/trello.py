@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from roadmap.feature import FeatureStatus, TrelloFeature
+from roadmap.feature import TrelloFeature
 from roadmap.logging import Logger
 from trello import TrelloClient
 
@@ -14,12 +14,16 @@ class TrelloBoard:
         self.id = id
         self.name = name
         self._client = client
+        self._lists = None
+        self._labels = None
         self.logger = Logger()
 
     @property
     def _board(self):
         if self.id:
-            return self._client.get_board(self.id)
+            board = self._client.get_board(self.id)
+            self.name = board.name
+            return board
 
         all_boards = self._client.list_boards()
         for board in all_boards:
@@ -27,6 +31,20 @@ class TrelloBoard:
                 self.id = board.id
                 return board
         raise ValueError(f"Board {self.name} not in {all_boards}")
+
+    @property
+    def lists(self):
+        if self._lists:
+            return self._lists
+        self._lists = self._board.all_lists()
+        return self._lists
+
+    @property
+    def labels(self):
+        if self._labels:
+            return self._labels
+        self._labels = self._board.get_labels(limit=100)
+        return self._labels
 
     @property
     def _card_names(self):
@@ -40,7 +58,7 @@ class TrelloBoard:
         return missing_cards
 
 
-class FeedbackBoard(TrelloBoard):
+class SizingBoard(TrelloBoard):
     def __init__(self, *args, sizes=[1, 2, 3, 5, 8, 13, 21, 34], **kwargs):
         super().__init__(*args, **kwargs)
         self._sizes = sizes
@@ -80,11 +98,152 @@ class FeedbackBoard(TrelloBoard):
                 if update_bugs and feedback.bugs:
                     attachments = card.attachments
                     for bug in feedback.bugs:
-                        if bug not in [a['url'] for a in attachments]:
+                        if bug not in [a["url"] for a in attachments]:
                             card.attach(url=bug)
 
-    def get_features(self):
-        pass
+    @property
+    def sized_features(self):
+        all_lists = self._board.all_lists()
+        all_cards = self._board.all_cards()
+        sized_features = []
+        for card in all_cards:
+            lst = [lst for lst in all_lists if card.list_id == lst.id][0]
+            size = lst.name.lstrip("Size").strip()
+            try:
+                size = int(size)
+            except ValueError:
+                size = None
+            self.logger.debug(f"Size: {size}")
+            sized_features.append(SizedFeature(name=card.name, size=size))
+        return sized_features
+
+
+class SizedFeature:
+    def __init__(self, name, size):
+        self.name = name
+        self.size = size
+
+    def __repr__(self):
+        return f"{self.name}:{self.size}"
+
+
+class ScrumBoard(TrelloBoard):
+    IN_PROGRESS_LIST = "In Progress"
+    DONE_LIST = "Done"
+    RELEASE_COLORS = ["green", "blue", "orange", "red", "black"]
+
+    def __init__(self, *args, product_categories=[], **kwargs):
+        super().__init__(*args, **kwargs)
+        self.product_categories = product_categories
+
+    def create_release(self, release):
+        """Create A new release list"""
+        pos = None
+        all_lists = self._board.all_lists()
+        for lst in all_lists:
+            if release == lst.name:
+                # Already exists
+                return
+        for lst in all_lists:
+            if self.IN_PROGRESS_LIST.lower() == lst.name.lower():
+                pos = lst.pos - 1
+                break
+        self._board.add_list(release, pos)
+        for color in self.RELEASE_COLORS:
+            self._board.add_label(release, color)
+
+    def create_cards(self, roadmap_features):
+        """Create cards for a list of roadmap features"""
+        card_names = self._card_names
+        all_lists = self._board.all_lists()
+        all_labels = self._board.get_labels(limit=100)
+        for feature in roadmap_features:
+            if feature.category not in self.product_categories:
+                self.logger.debug(
+                    f"{self.name} not adding {feature}, category does not match"
+                )
+                continue
+            if feature.name in card_names:
+                # Card already exists
+                continue
+            lst = [lst for lst in all_lists if lst.name == feature.release][0]
+            label = [
+                label
+                for label in all_labels
+                if label.name == feature.release and label.color == "green"
+            ][0]
+            lst.add_card(name=feature.name, labels=[label], position="bottom")
+
+    def get_release_features(self, release, only_visible=True):
+        release_labels = filter(
+            lambda x: x.name == release and x.color in self.RELEASE_COLORS, self.labels
+        )
+        release_ids = [lbl.id for lbl in release_labels]
+        if only_visible:
+            cards = self._board.visible_cards()
+        else:
+            cards = self._board.all_cards()
+
+        features = []
+        for card in cards:
+            in_release = False
+            for label in card.labels:
+                if label.id in release_ids:
+                    in_release = True
+            if not in_release:
+                continue
+            status = self.get_card_status(card, release)
+            features.append(ScrumFeature(card=card, status=status, release=release))
+        return features
+
+    def get_card_status(self, card, release):
+        lst = next(filter(lambda x: x.id == card.list_id, self.lists))
+        status = FeatureStatus()
+        if lst.name.lower() == self.DONE_LIST:
+            status.done()
+        elif lst.name != release:
+            # TODO: Check sub-cards, tasks, etc
+            status.started()
+        label = next(filter(lambda x: x.name == release, card.labels))
+        status.set_color(label.color)
+        return status
+
+
+class ScrumFeature:
+    def __init__(self, card, status, release=None):
+        self.name = card.name
+        self.status = status
+        self.release = release
+
+
+class FeatureStatus:
+    NOT_STARTED = 1
+    IN_PROGRESS = 2
+    DONE = 3
+
+    def __init__(self):
+        self._color = "white"
+        self._state = self.NOT_STARTED
+
+    @property
+    def color(self):
+        return self._color
+
+    @property
+    def state(self):
+        return self._state
+
+    def set_color(self, color):
+        self._color = color.lower()
+
+    def not_started(self):
+        self._state = self.NOT_STARTED
+
+    def started(self):
+        self._state = self.IN_PROGRESS
+
+    def done(self):
+        self._state = self.DONE
 
 
 class Utils:

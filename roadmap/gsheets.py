@@ -57,18 +57,25 @@ class Roadmap:
         return features
 
     def status_to_color(self, status):
-        if status.color == "green":
-            return gspread_formatting.Color.fromHex("#6aa84f")
-        elif status.color == "blue":
-            return gspread_formatting.Color.fromHex("#3d85c6")
-        elif status.color == "orange":
-            return gspread_formatting.Color.fromHex("#e69138")
-        elif status.color == "red":
-            return gspread_formatting.Color.fromHex("#cc0000")
-        elif status.color == "black":
-            return gspread_formatting.Color.fromHex("#000000")
+        product_colors = {"green": "#6aa84f",
+                          "blue": "#3d85c6",
+                          "orange": "#e69138",
+                          "red": "#cc0000",
+                          "black": "#000000",
+                          "white": "#ffffff",
+                          }
+        # These colors show regardless of current progress
+        if status.color in ["red", "orange", "black"]:
+            return gspread_formatting.Color.fromHex(product_colors[status.color])
+        # Return the color if feature has started
+        elif status.state != status.NOT_STARTED:
+            return gspread_formatting.Color.fromHex(product_colors[status.color])
         else:
-            return gspread_formatting.Color.fromHex("#ffffff")
+            return gspread_formatting.Color.fromHex(product_colors["white"])
+
+    def status_to_value(self, status):
+        if status.state == status.DONE:
+            return 'C'
 
     def update_features(self, trello_features):
         name_list = (
@@ -106,7 +113,7 @@ class Roadmap:
                     "range": a1,
                     "values": [
                         [
-                            feature.status.value,
+                            self.status_to_value(feature.status),
                         ]
                     ],
                 }
@@ -137,8 +144,6 @@ class ProductFeedback:
             self._ws.get_all_records(),
             dtype="string",
         )
-        # df.columns = df.loc[0, :].tolist()
-        # df.columns.values[0] = "Labels"
         df.set_index("Title", inplace=True, drop=False)
         self._df = df
         return df
@@ -147,16 +152,26 @@ class ProductFeedback:
     def all_features(self):
         """Return all feedback features"""
         features = []
-        for feature in self.df.to_dict('records'):
+        for feature in self.df.to_dict("records"):
             features.append(FeedbackFeature(self._product, feature))
         return features
 
-    @property
-    def named_features(self):
-        """Return only features with a name"""
-        # TODO: Test or remove this, is it useful?
-        features = []
-        for feature in self.df.to_dict('records'):
-            features.append(FeedbackFeature(self._product, feature))
-        features = filter(lambda x: x.name, features)
-        return features
+    def update_sizes(self, sized_features):
+        title_list = self._df["Title"].tolist()
+        size_col = self.df.columns.get_loc("Duration") + 1  # zero based
+        value_updates = []
+        for sized_feature in sized_features:
+            # +1 for zero based and 1 to account for header
+            row = title_list.index(sized_feature.name) + 2
+            a1 = gspread.utils.rowcol_to_a1(row, size_col)
+            value_updates.append(
+                {
+                    "range": a1,
+                    "values": [
+                        [
+                            sized_feature.size,
+                        ],
+                    ],
+                }
+            )
+        self._ws.batch_update(value_updates)

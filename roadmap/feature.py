@@ -66,10 +66,6 @@ class FeedbackFeature:
         return f"{self.product}:{self.name}"
 
 
-class SizedFeature:
-    pass
-
-
 class FeatureStatus:
     def __init__(
         self,

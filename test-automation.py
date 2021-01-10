@@ -52,14 +52,12 @@ api_key = "a0c7db3670669c24c6f0c16fbdb13024"
 # roadmap.update_features(trello_features)
 
 # Load features from ProductFeedback
-cdk_pfbBoard = ProductFeedback(
+cdk_pfbSheet = ProductFeedback(
     key="1qg9-hNv3yy-J0r_qW28fM3EqpEiC1F6pLVSJOjVdGAU",
     product="Charmed Kubernetes",
 )
 
-cdk_pfbFeatures = cdk_pfbBoard.all_features
-# for feature in cdk_pfb_features:
-#     print(feature)
+cdk_pfbFeatures = cdk_pfbSheet.all_features
 
 # Setup Feedback Board
 trello_client = TrelloClient(api_key, api_secret)
@@ -69,3 +67,5 @@ cdk_tfbBoard.setup_lists()
 cdk_tfbBoard.add_cards(cdk_pfbFeatures)
 
 # Update ProductFeedback sizing
+cdk_sized_features = cdk_tfbBoard.sized_features
+cdk_pfbSheet.update_sizes(cdk_sized_features)
