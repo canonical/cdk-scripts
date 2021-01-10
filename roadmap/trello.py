@@ -16,6 +16,7 @@ class TrelloBoard:
         self._client = client
         self._lists = None
         self._labels = None
+        self._cards = None
         self.logger = Logger()
 
     @property
@@ -45,6 +46,13 @@ class TrelloBoard:
             return self._labels
         self._labels = self._board.get_labels(limit=100)
         return self._labels
+
+    @property
+    def cards(self):
+        if self._cards:
+            return self._cards
+        self._cards = self._board.all_cards()
+        return self._cards
 
     @property
     def _card_names(self):
@@ -173,6 +181,18 @@ class ScrumBoard(TrelloBoard):
                 if label.name == feature.release and label.color == "green"
             ][0]
             lst.add_card(name=feature.name, labels=[label], position="bottom")
+
+    def tag_release(self, features):
+        """Add feature tags to existing cards"""
+        for feature in features:
+            release_label = [
+                label
+                for label in self.labels
+                if label.name == feature.release and label.color == "green"
+            ][0]
+            for card in self.cards:
+                if card.name == feature.name:
+                    card.add_label(release_label)
 
     def get_release_features(self, release, only_visible=True):
         release_labels = filter(
