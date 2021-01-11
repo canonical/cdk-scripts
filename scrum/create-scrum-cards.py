@@ -17,10 +17,13 @@ def parse_args():
 def main():
     args = parse_args()
     utils = CDKUtils()
-    scrum_boards = utils.get_scrum_boards()
     roadmap = utils.get_product_roadmap(args.release)
     roadmap_features = roadmap.get_features()
-    for board in scrum_boards:
+    teams = [
+        "CDK",
+    ]
+    for team in teams:
+        board = utils.get_scrum_board(team)
         board.create_release(args.release)
         board.create_cards(roadmap_features)
 

@@ -12,27 +12,13 @@ class CDKUtils:
             self.config["Trello"]["api_secret"].get(str),
         )
 
-    def get_scrum_boards(self):
-        scrum_boards = []
-        cdk = ScrumBoard(
+    def get_scrum_board(self, team):
+        board = ScrumBoard(
             client=self.client,
-            product_categories=self.config["CDK"]["product_categories"].get(list),
-            id=self.config["CDK"]["scrum_id"].get(str),
+            product_categories=self.config[team]["product_categories"].get(list),
+            id=self.config[team]["scrum_id"].get(str),
         )
-        scrum_boards.append(cdk)
-        # mk8s = ScrumBoard(
-        #     client=self.client,
-        #     product_categories=self.config["MicroK8s"]["product_categories"],
-        #     id=self.config["MicroK8s"]["scrum_id"],
-        # )
-        # scrum_boards.append(mk8s)
-        # kf = ScrumBoard(
-        #     client=self.client,
-        #     product_categories=self.config["Kubeflow"]["product_categories"],
-        #     id=self.config["Kubeflow"]["scrum_id"],
-        # )
-        # scrum_boards.append(kf)
-        return scrum_boards
+        return board
 
     def get_team_board(self, team):
         """Provide the config key as team"""
