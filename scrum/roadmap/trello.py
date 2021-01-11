@@ -264,6 +264,7 @@ class ScrumBoard(TrelloBoard):
     def create_cards(self, roadmap_features):
         """Create cards for a list of roadmap features"""
         card_names = [card.name for card in self.cards]
+        self.logger.info("Creating roadmap cards")
         for feature in roadmap_features:
             if feature.category not in self.product_categories:
                 self.logger.debug(
@@ -272,6 +273,9 @@ class ScrumBoard(TrelloBoard):
                 continue
             if feature.name in card_names:
                 # Card already exists
+                self.logger.debug(
+                    f"{self.name} not adding {feature}, card already exists"
+                )
                 continue
             lst = [lst for lst in self.lists if lst.name == feature.release][0]
             label = [
@@ -279,26 +283,36 @@ class ScrumBoard(TrelloBoard):
                 for label in self.labels
                 if label.name == feature.release and label.color == "green"
             ][0]
+            self.logger.debug(f"Adding card {feature.name}")
             lst.add_card(name=feature.name, labels=[label], position="bottom")
+            self._cards = None  # Clear card cache
 
     def tag_release(self, features):
         """Add feature tags to existing cards"""
+        self.logger.info("Tagging existing cards with relese")
         for feature in features:
             release_label = [
                 label
                 for label in self.labels
                 if label.name == feature.release and label.color == "green"
             ][0]
+            self.logger.debug(f"Looking for feature {feature.name}")
             for card in self.cards:
                 if card.name == feature.name:
+                    self.logger.debug(f"Found card {card.name}")
                     try:
                         next(
                             filter(lambda x: x.name == release_label.name, card.labels)
                         )
-                        continue
-                    except StopIteration:
+                        # Already labeled
+                        self.logger.debug(f"Found existing lable, skipping {card.name}")
+                        break
+                    except (StopIteration, TypeError):
+                        # No lables, or no release label
                         pass
+                    self.logger.debug(f"Labeling card {card.name}")
                     card.add_label(release_label)
+                    break
 
     def get_release_features(self, release, only_visible=True):
         release_labels = filter(
@@ -324,7 +338,7 @@ class ScrumBoard(TrelloBoard):
             features.append(ScrumFeature(card=card, status=status, release=release))
         return features
 
-    def get_card_status(self, card, release):
+    def get_card_status(self, card, release, skip_cards=[]):
         lst = next(filter(lambda x: x.id == card.list_id, self.lists))
         status = FeatureStatus()
         if lst.name == self.DONE_LIST:
@@ -340,6 +354,10 @@ class ScrumBoard(TrelloBoard):
             # Set started if an attached card *on this board* has started
             for attachment in card.get_attachments():
                 if attachment.is_upload:
+                    self.logger.debug(f"Skipping upload")
+                    continue
+                if attachment.url in skip_cards:
+                    self.logger.debug(f"Skipping skip_card: {attachment.url}")
                     continue
                 self.logger.debug(f"Searching: {attachment.url}")
                 try:
@@ -348,9 +366,13 @@ class ScrumBoard(TrelloBoard):
                     )
                 except StopIteration:
                     # Card not found on this board
-                    self.logger.debug(f"Attachment not card on this board board")
+                    self.logger.debug(
+                        f"Attachment not card on this board board: {attachment.url}"
+                    )
                     continue
-                substatus = self.get_card_status(subcard, release)
+                substatus = self.get_card_status(
+                    subcard, release, skip_cards=skip_cards.append(card.url)
+                )
                 self.logger.debug(f"SubStatus: {substatus}")
                 if substatus != substatus.NOT_STARTED:
                     status.started()
@@ -359,6 +381,7 @@ class ScrumBoard(TrelloBoard):
             status.set_color(label.color)
         except TypeError:
             # Don't set color if there is no release label
+            self.logger.debug(f"Not setting color on status: {card.name}")
             pass
         return status
 
