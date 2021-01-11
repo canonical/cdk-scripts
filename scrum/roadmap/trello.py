@@ -68,6 +68,8 @@ class TrelloBoard:
     def update_sizes(self, sized_features):
         """Update story point field from sized_features"""
         for feature in sized_features:
+            if not feature.size:
+                continue
             try:
                 card = next(filter(lambda x: x.name == feature.name, self.cards))
             except StopIteration:
@@ -84,7 +86,8 @@ class TrelloBoard:
                     f"Custom Field {self.STORY_POINTS_FIELD}"
                     " not found on {self.board.name}."
                 )
-            card.set_custom_field(str(feature.size), sp)
+            self.logger.debug(f"{type(feature.size)}")
+            card.set_custom_field(feature.size, sp)
 
     # @property
     # def _card_names(self):

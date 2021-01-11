@@ -165,12 +165,15 @@ class ProductFeedback:
         else:
             result = all
         self.logger.debug(f"Active: {active}")
-        # for feature in all:
-        #     self.logger.debug(f"{feature.resolved}")
-        #     self.logger.debug(f"{type(feature.resolved)}")
         return result
 
+    def add_title(self):
+        # TODO: https://stackoverflow.com/questions/36942453/fill-empty-cells-in-column-with-value-of-other-columns
+        # Create a title if missing
+        pass
+
     def update_sizes(self, sized_features):
+        # TODO: Deal with no title lits, and matching
         title_list = self._df["Title"].tolist()
         size_col = self.df.columns.get_loc("Duration") + 1  # zero based
         value_updates = []
