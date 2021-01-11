@@ -128,6 +128,7 @@ class Roadmap:
 
 
 class ProductFeedback:
+
     def __init__(self, key, product):
         self.logger = Logger()
         self._client = gspread.oauth()
@@ -155,6 +156,19 @@ class ProductFeedback:
         for feature in self.df.to_dict("records"):
             features.append(FeedbackFeature(self._product, feature))
         return features
+
+    def get_features(self, active=True):
+        """Return features"""
+        all = self.all_features
+        if active:
+            result = list(filter(lambda x: not x.resolved, all))
+        else:
+            result = all
+        self.logger.debug(f"Active: {active}")
+        # for feature in all:
+        #     self.logger.debug(f"{feature.resolved}")
+        #     self.logger.debug(f"{type(feature.resolved)}")
+        return result
 
     def update_sizes(self, sized_features):
         title_list = self._df["Title"].tolist()

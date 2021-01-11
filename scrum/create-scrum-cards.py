@@ -26,6 +26,8 @@ def main():
         board = utils.get_scrum_board(team)
         board.create_release(args.release)
         board.create_cards(roadmap_features)
+        board.create_cards(roadmap_features)
+        board.tag_release(roadmap_features)
 
 
 if __name__ == "__main__":

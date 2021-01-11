@@ -1,5 +1,6 @@
-from roadmap.logging import Logger
 import re
+
+from roadmap.logging import Logger
 
 
 class BaseFeature:
@@ -32,26 +33,39 @@ class TrelloFeature(BaseFeature):
 
 
 class FeedbackFeature:
+    RESOLVED_HEADER = "Resolved"
+    DESCRIPTION_HEADER = "Description"
+    TITLE_HEADER = "Title"
+    STORY_POINTS_HEADER = "Duration"
+
     def __init__(self, product, row):
         self.product = product
         self.logger = Logger()
         self._row = row
-        self._lp_reg = re.compile(r'^\d{7}$')
+        self._lp_reg = re.compile(r"^\d{7}$")
 
     @property
     def name(self):
-        return self._row.get("Title", "")
+        title = self._row.get(self.TITLE_HEADER, "")
+        if not len(title):
+            title = self.description[:32]
+        return title
 
     @property
     def description(self):
-        return self._row.get("Description", "")
+        return self._row.get(self.DESCRIPTION_HEADER, "")
 
     @property
     def story_points(self):
-        sp = self._row.get("Duration", None)
+        sp = self._row.get(self.STORY_POINTS_HEADER, None)
         if sp:
             sp = int(sp)
         return sp
+
+    @property
+    def resolved(self):
+        resolved = self._row.get(self.RESOLVED_HEADER, False) == "TRUE"
+        return resolved
 
     @property
     def bugs(self):
@@ -69,35 +83,35 @@ class FeedbackFeature:
         return f"{self.product}:{self.name}"
 
 
-class FeatureStatus:
-    def __init__(
-        self,
-        started=False,
-        done=False,
-        planned=True,
-        at_risk=False,
-        miss=False,
-        dropped=False,
-    ):
-        # Set complete value
-        if done:
-            self.value = "C"
-        else:
-            self.value = ""
-
-        # Set progress color
-        if started:
-            if not planned:
-                self.color = "blue"
-            else:
-                self.color = "green"
-        else:
-            self.color = "white"
-
-        # Set override colors
-        if miss:
-            self.color = "red"
-        elif dropped:
-            self.color = "black"
-        elif at_risk:
-            self.color = "orange"
+# class FeatureStatus:
+#     def __init__(
+#         self,
+#         started=False,
+#         done=False,
+#         planned=True,
+#         at_risk=False,
+#         miss=False,
+#         dropped=False,
+#     ):
+#         # Set complete value
+#         if done:
+#             self.value = "C"
+#         else:
+#             self.value = ""
+#
+#         # Set progress color
+#         if started:
+#             if not planned:
+#                 self.color = "blue"
+#             else:
+#                 self.color = "green"
+#         else:
+#             self.color = "white"
+#
+#         # Set override colors
+#         if miss:
+#             self.color = "red"
+#         elif dropped:
+#             self.color = "black"
+#         elif at_risk:
+#             self.color = "orange"
