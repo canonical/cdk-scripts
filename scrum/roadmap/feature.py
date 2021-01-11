@@ -48,7 +48,10 @@ class FeedbackFeature:
 
     @property
     def story_points(self):
-        return self._row.get("Duration", None)
+        sp = self._row.get("Duration", None)
+        if sp:
+            sp = int(sp)
+        return sp
 
     @property
     def bugs(self):

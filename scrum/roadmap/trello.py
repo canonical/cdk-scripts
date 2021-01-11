@@ -67,7 +67,7 @@ class TrelloBoard:
 
 
 class SizingBoard(TrelloBoard):
-    def __init__(self, *args, sizes=[1, 2, 3, 5, 8, 13, 21, 34], **kwargs):
+    def __init__(self, *args, sizes=[1, 2, 3, 5, 8, 13, 21], **kwargs):
         super().__init__(*args, **kwargs)
         self._sizes = sizes
 
@@ -76,31 +76,40 @@ class SizingBoard(TrelloBoard):
         list_names = [list.name for list in all_lists]
         desired_lists = ["Unsized"]
         desired_lists.extend([f"Size {n}" for n in self._sizes])
+        desired_lists.append("Epic")
         missing_lists = [name for name in desired_lists if name not in list_names]
         for name in missing_lists:
             self._board.add_list(name, pos="bottom")
+        self._lists = None
 
-    def add_cards(self, product_feedback, update_description=False, update_bugs=True):
+    def clear_board(self):
+        for card in self.cards:
+            card.delete()
+
+    def add_feedback_cards(
+        self, product_feedback, update_description=False, update_bugs=True
+    ):
         """Add missing cards"""
-        all_lists = self._board.all_lists()
-        all_cards = self._board.all_cards()
-        card_names = [card.name for card in all_cards]
+        card_names = [card.name for card in self.cards]
         for feedback in product_feedback:
             if feedback.name not in card_names:
                 # New card
                 if feedback.story_points:
-                    list_name = f"Size {feedback.story_points}"
+                    if feedback.story_points not in self._sizes:
+                        list_name = "Epic"
+                    else:
+                        list_name = f"Size {feedback.story_points}"
                 else:
                     list_name = f"Unsized"
-                tlist = [lst for lst in all_lists if lst.name == list_name][0]
+                slist = [lst for lst in self.lists if lst.name == list_name][0]
                 self.logger.debug(f"Feature Size: {feedback.story_points}")
-                self.logger.debug(f"Found List: {tlist}")
-                card = tlist.add_card(name=feedback.name, desc=feedback.description)
+                self.logger.debug(f"Found List: {slist}")
+                card = slist.add_card(name=feedback.name, desc=feedback.description)
                 for bug in feedback.bugs:
                     card.attach(url=bug)
             elif update_description or update_bugs:
                 # Existing card
-                card = [card for card in all_cards if card.name == feedback.name][0]
+                card = [card for card in self.cards if card.name == feedback.name][0]
                 if update_description and card.description != feedback.description:
                     card.set_description(feedback.description)
                 if update_bugs and feedback.bugs:
@@ -109,13 +118,22 @@ class SizingBoard(TrelloBoard):
                         if bug not in [a["url"] for a in attachments]:
                             card.attach(url=bug)
 
+    def add_team_cards(self, team_features):
+        """Add cards from team feautres"""
+        # Team features have all the fields of a Product feature if links are treated
+        # like bugs. For now we'll do the mapping.
+        for feature in team_features:
+            feature.bugs = feature.links
+        self.add_feedback_cards(team_features)
+
     @property
     def sized_features(self):
-        all_lists = self._board.all_lists()
-        all_cards = self._board.all_cards()
         sized_features = []
-        for card in all_cards:
-            lst = [lst for lst in all_lists if card.list_id == lst.id][0]
+        for card in self.cards:
+            lst = [lst for lst in self.lists if card.list_id == lst.id][0]
+            if "Epic" in list.name:
+                # TODO: Sum up size of all attached cards
+                pass
             size = lst.name.lstrip("Size").strip()
             try:
                 size = int(size)
@@ -133,6 +151,30 @@ class SizedFeature:
 
     def __repr__(self):
         return f"{self.name}:{self.size}"
+
+
+class TeamBoard(TrelloBoard):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def get_features(self, only_visible=True):
+        features = []
+        for card in self.cards:
+            if only_visible and not card.closed:
+                features.append(TeamFeature(card=card))
+        return features
+
+
+class TeamFeature:
+    def __init__(self, card):
+        self.name = card.name
+        self.description = card.description
+        self.links = []
+        # TODO Check for a custom_field for story points
+        self.story_points = None
+        for attachment in card.get_attachments():
+            if attachment.url:
+                self.links.append(attachment.url)
 
 
 class ScrumBoard(TrelloBoard):

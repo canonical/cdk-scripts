@@ -1,6 +1,6 @@
 import confuse
-from roadmap.gsheets import Roadmap
-from roadmap.trello import ScrumBoard
+from roadmap.gsheets import ProductFeedback, Roadmap
+from roadmap.trello import ScrumBoard, SizingBoard, TeamBoard
 from trello import TrelloClient
 
 
@@ -17,27 +17,49 @@ class CDKUtils:
         cdk = ScrumBoard(
             client=self.client,
             product_categories=self.config["CDK"]["product_categories"].get(list),
-            id=self.config["CDK"]["board_id"].get(str),
+            id=self.config["CDK"]["scrum_id"].get(str),
         )
         scrum_boards.append(cdk)
         # mk8s = ScrumBoard(
         #     client=self.client,
         #     product_categories=self.config["MicroK8s"]["product_categories"],
-        #     id=self.config["MicroK8s"]["board_id"],
+        #     id=self.config["MicroK8s"]["scrum_id"],
         # )
         # scrum_boards.append(mk8s)
         # kf = ScrumBoard(
-        #     client=client,
+        #     client=self.client,
         #     product_categories=self.config["Kubeflow"]["product_categories"],
-        #     id=self.config["Kubeflow"]["board_id"],
+        #     id=self.config["Kubeflow"]["scrum_id"],
         # )
         # scrum_boards.append(kf)
         return scrum_boards
+
+    def get_team_board(self, team):
+        """Provide the config key as team"""
+        board = TeamBoard(
+            client=self.client,
+            id=self.config[team]["team_id"].get(str),
+        )
+        return board
+
+    def get_sizing_board(self, team):
+        """Provide the config key as team"""
+        board = SizingBoard(
+            client=self.client,
+            id=self.config[team]["sizing_id"].get(str),
+        )
+        return board
 
     def get_product_roadmap(self, release):
         return Roadmap(
             key=self.config["Roadmap"]["key"].get(str),
             org=self.config["Roadmap"]["org"].get(str),
             team=self.config["Roadmap"]["team"].get(str),
-            release=release
+            release=release,
+        )
+
+    def get_product_feedback(self, team):
+        return ProductFeedback(
+            key=self.config["Feedback"]["key"].get(str),
+            product=self.config[team]["feedback_product"].get(str),
         )
