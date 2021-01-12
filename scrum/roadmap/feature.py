@@ -81,37 +81,3 @@ class FeedbackFeature:
 
     def __repr__(self):
         return f"{self.product}:{self.name}"
-
-
-# class FeatureStatus:
-#     def __init__(
-#         self,
-#         started=False,
-#         done=False,
-#         planned=True,
-#         at_risk=False,
-#         miss=False,
-#         dropped=False,
-#     ):
-#         # Set complete value
-#         if done:
-#             self.value = "C"
-#         else:
-#             self.value = ""
-#
-#         # Set progress color
-#         if started:
-#             if not planned:
-#                 self.color = "blue"
-#             else:
-#                 self.color = "green"
-#         else:
-#             self.color = "white"
-#
-#         # Set override colors
-#         if miss:
-#             self.color = "red"
-#         elif dropped:
-#             self.color = "black"
-#         elif at_risk:
-#             self.color = "orange"

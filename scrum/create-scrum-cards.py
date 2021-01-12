@@ -27,7 +27,6 @@ def main():
     ]
     for team in teams:
         board = utils.get_scrum_board(team)
-        board.logger.set_level("debug")
         board.create_release(args.release)
         board.create_cards(roadmap_features)
         board.create_cards(roadmap_features)

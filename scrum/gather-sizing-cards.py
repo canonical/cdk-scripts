@@ -19,13 +19,13 @@ def main():
         sizing_board.truncate_lists()
 
     # Non-product teams
-    # for team in [
-    #     "Test",
-    # ]:
-    #     team_board = utils.get_team_board(team)
-    #     sizing_board = utils.get_sizing_board(team)
-    #     sizing_board.setup_lists()
-    #     sizing_board.add_team_cards(team_board.get_features())
+    for team in [
+        "Test",
+    ]:
+        team_board = utils.get_team_board(team)
+        sizing_board = utils.get_sizing_board(team)
+        sizing_board.setup_lists()
+        sizing_board.add_team_cards(team_board.get_features())
 
 
 if __name__ == "__main__":
