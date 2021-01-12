@@ -10,7 +10,6 @@ def main():
     ]
     for team in teams:
         sizing_board = utils.get_sizing_board(team)
-        sizing_board.logger.set_level("debug")
         sized_features = sizing_board.sized_features
         # Update team board
         team_board = utils.get_team_board(team)

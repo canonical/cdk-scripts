@@ -20,8 +20,10 @@ def main():
     roadmap = utils.get_product_roadmap(args.release)
     roadmap_features = roadmap.get_features()
     teams = [
-        # "CDK",
+        "CDK",
         "Test",
+        "Kubeflow",
+        "MicroK8s",
     ]
     for team in teams:
         board = utils.get_scrum_board(team)

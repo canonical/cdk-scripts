@@ -116,6 +116,18 @@ class SizingBoard(TrelloBoard):
         for card in self.cards:
             card.delete()
 
+    def truncate_lists(self, len=3):
+        """Truncate size lists to max len"""
+        for list in self.lists:
+            if list.name == "Unsized":
+                # Don't truncate the unsized list
+                continue
+            self.logger.debug(f"Truncating {list} to {len} cards")
+            for i, card in enumerate(list.list_cards_iter()):
+                if i < len:
+                    continue
+                card.delete()
+
     def add_feedback_cards(
         self, product_feedback, update_description=False, update_bugs=True
     ):

@@ -57,13 +57,14 @@ class Roadmap:
         return features
 
     def status_to_color(self, status):
-        product_colors = {"green": "#6aa84f",
-                          "blue": "#3d85c6",
-                          "orange": "#e69138",
-                          "red": "#cc0000",
-                          "black": "#000000",
-                          "white": "#ffffff",
-                          }
+        product_colors = {
+            "green": "#6aa84f",
+            "blue": "#3d85c6",
+            "orange": "#e69138",
+            "red": "#cc0000",
+            "black": "#000000",
+            "white": "#ffffff",
+        }
         # These colors show regardless of current progress
         if status.color in ["red", "orange", "black"]:
             return gspread_formatting.Color.fromHex(product_colors[status.color])
@@ -75,7 +76,7 @@ class Roadmap:
 
     def status_to_value(self, status):
         if status.state == status.DONE:
-            return 'C'
+            return "C"
 
     def update_features(self, trello_features):
         name_list = (
@@ -128,7 +129,6 @@ class Roadmap:
 
 
 class ProductFeedback:
-
     def __init__(self, key, product):
         self.logger = Logger()
         self._client = gspread.oauth()
@@ -167,13 +167,24 @@ class ProductFeedback:
         self.logger.debug(f"Active: {active}")
         return result
 
-    def add_title(self):
-        # TODO: https://stackoverflow.com/questions/36942453/fill-empty-cells-in-column-with-value-of-other-columns
-        # Create a title if missing
-        pass
+    def add_titles(self, words=8):
+        # Build series of truncated descriptions
+        truncated = (
+            self.df["Description"].str.split(r"\s", expand=True).iloc[:, 0:words]
+        )
+        titles = truncated.fillna("").apply(" ".join, axis=1)
+        # Find range for writting
+        title_column = self.df.columns.get_loc("Title") + 1  # zero based
+        last_row = len(self.df.index) + 1  # zero based
+        a1_start = gspread.utils.rowcol_to_a1(2, title_column)
+        a1_end = gspread.utils.rowcol_to_a1(last_row, title_column)
+        a1_range = f"{a1_start}:{a1_end}"
+        # Update sheet
+        self._ws.update(a1_range, [titles.tolist()], major_dimension="COLUMNS")
 
     def update_sizes(self, sized_features):
-        # TODO: Deal with no title lits, and matching
+        if not self.df["Title"]:
+            raise ValueError("Title header not found in product feedback")
         title_list = self._df["Title"].tolist()
         size_col = self.df.columns.get_loc("Duration") + 1  # zero based
         value_updates = []

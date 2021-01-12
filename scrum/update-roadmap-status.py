@@ -21,6 +21,8 @@ def main():
     teams = [
         "CDK",
         "Test",
+        "Kubeflow",
+        "MicroK8s",
     ]
     scrum_features = []
     for team in teams:
