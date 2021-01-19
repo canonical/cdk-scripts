@@ -23,10 +23,23 @@ class RoadmapFeature(BaseFeature):
         return f"{self.team}:{self.release}:{self.name}"
 
 
-class TrelloFeature(BaseFeature):
-    def __init__(self, board, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.board = board
+class TrelloFeature():
+    def __init__(self, card, sp_field=None, attachments=False):
+        self.name = card.name
+        self.description = card.description
+        self.links = []
+        self.story_points = None
+        if sp_field:
+            for field in card.custom_fields:
+                if field.name == sp_field.name:
+                    self.story_points = int(field.value)
+        # TODO: consider combining Features and SizedFeature for a single class
+        self.size = self.story_points
+
+        if attachments:
+            for attachment in card.get_attachments():
+                if attachment.url:
+                    self.links.append(attachment.url)
 
     def __repr__(self):
         return f"{self.release}:{self.name}:{self.status.value}"

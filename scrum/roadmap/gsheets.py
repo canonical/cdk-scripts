@@ -198,7 +198,7 @@ class ProductFeedback:
                     "range": a1,
                     "values": [
                         [
-                            sized_feature.size,
+                            sized_feature.story_points,
                         ],
                     ],
                 }

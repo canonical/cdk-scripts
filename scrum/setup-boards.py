@@ -18,6 +18,7 @@ def main():
         board.setup_board()
         board = utils.get_sizing_board(team)
         board.setup_board()
+        board.clear_board()
 
 
 if __name__ == "__main__":

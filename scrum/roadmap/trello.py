@@ -51,10 +51,22 @@ class TrelloBoard:
 
     @property
     def cards(self):
+        """Card  retrevial options
+        all = every card
+        visible = cards that are not archived and on an list that isn't archived
+        open = unarchived cards on archived lists
+        """
         if self._cards:
             return self._cards
         self._cards = self._board.all_cards()
         return self._cards
+
+    @property
+    def visible_cards(self):
+        if self._visible_cards:
+            return self._visible_cards
+        self._visible_cards = self._board.visible_cards()
+        return self._visible_cards
 
     @property
     def custom_fields(self):
@@ -98,7 +110,7 @@ class TrelloBoard:
 
     @property
     def epics(self):
-        """Return all carts with the epic label"""
+        """Return all cards with the epic label"""
         if self._epics:
             return self._epics
         self._epics = []
@@ -119,7 +131,8 @@ class TrelloBoard:
             self._labels = None  # clear cache
 
     def update_sizes(self, sized_features=[]):
-        """Update story point field from sized_features"""
+        """Update story point field from sized_features
+        Sized Features will be updated as well as all epics on the board"""
         for feature in sized_features:
             if not feature.size:
                 self.logger.warn(f"Features {feature.name} has no size")
@@ -184,6 +197,51 @@ class TrelloBoard:
             return sum(subpoints_list, points)
         else:
             return points
+
+    def get_features(self, closed=True, attachments=False):
+        features = []
+        for card in self.cards:
+            # TODO: Test retrevial based on visibility
+            if card.closed and not closed:
+                continue
+            features.append(
+                TrelloFeature(
+                    card=card,
+                    status=self._get_card_status(card),
+                    sp_field=self.sp_field,
+                    attachments=attachments,
+                )
+            )
+        return features
+
+    def _get_card_status(self, card):
+        """Return a status for this card"""
+        return "Undefined"
+
+
+class TrelloFeature:
+    def __init__(self, card, status, sp_field, attachments=False):
+        self.name = card.name
+        self.description = card.description
+        self.status = status
+        self.links = []
+        self.story_points = None
+        self._set_story_points(card, sp_field)
+        if attachments:
+            self._set_attachments(card)
+
+    def _set_attachments(self, card):
+        for attachment in card.get_attachments():
+            if attachment.url:
+                self.links.append(attachment.url)
+
+    def _set_story_points(self, card, sp_field):
+        for field in card.custom_fields:
+            if field.name == sp_field.name:
+                self.story_points = int(field.value)
+
+    def __repr__(self):
+        return f"'{self.name}':{self.story_points}:{self.status}"
 
 
 class SizingBoard(TrelloBoard):
@@ -369,42 +427,9 @@ class TeamBoard(TrelloBoard):
             self._board.add_label(self.FEEDBACK_LABEL_NAME, self.FEEDBACK_LABEL_COLOR)
             self._labels = None  # clear cache
 
-    def get_features(self, only_visible=True, attachments=True):
-        features = []
-        for card in self.cards:
-            # TODO: Test retrevial based on visibility
-            if only_visible and not card.closed:
-                features.append(
-                    TeamFeature(
-                        card=card, sp_field=self.sp_field, attachments=attachments
-                    )
-                )
-            elif not only_visible:
-                features.append(TeamFeature(card=card, attachments=attachments))
-        return features
-
-
-class TeamFeature:
-    def __init__(self, card, sp_field=None, attachments=False):
-        self.name = card.name
-        self.description = card.description
-        self.links = []
-        self.story_points = None
-        if sp_field:
-            for field in card.custom_fields:
-                if field.name == sp_field.name:
-                    self.story_points = int(field.value)
-        # TODO: consider combining Features and SizedFeature for a single class
-        self.size = self.story_points
-
-        if attachments:
-            for attachment in card.get_attachments():
-                if attachment.url:
-                    self.links.append(attachment.url)
-
 
 class ScrumBoard(TrelloBoard):
-    IN_PROGRESS_LIST = "In Progress"
+    IN_PROGRESS_LISTS = ["In Progress", "In Review", "Blocked"]
     DONE_LIST = "Done"
     RELEASE_COLORS = ["green", "blue", "orange", "red", "black"]
 
@@ -485,15 +510,15 @@ class ScrumBoard(TrelloBoard):
                     card.add_label(release_label)
                     break
 
-    def get_release_features(self, release, only_visible=True):
+    def get_release_features(self, release, visible=True):
         release_labels = filter(
             lambda x: x.name == release and x.color in self.RELEASE_COLORS, self.labels
         )
         release_ids = [lbl.id for lbl in release_labels]
-        if only_visible:
+        if visible:
             cards = self._board.visible_cards()
         else:
-            cards = self._board.all_cards()
+            cards = self.cards
 
         features = []
         for card in cards:
@@ -505,16 +530,18 @@ class ScrumBoard(TrelloBoard):
                     in_release = True
             if not in_release:
                 continue
-            status = self.get_card_status(card, release)
-            features.append(ScrumFeature(card=card, status=status, release=release))
+            status = self._get_card_status(card, release)
+            features.append(
+                TrelloFeature(card=card, status=status, sp_field=self.sp_field)
+            )
         return features
 
-    def get_card_status(self, card, release, skip_cards=[]):
+    def _get_card_status(self, card, release=None, skip_cards=[]):
         lst = next(filter(lambda x: x.id == card.list_id, self.lists))
-        status = FeatureStatus()
-        if lst.name == self.DONE_LIST:
+        status = ScrumStatus()
+        if lst.name.lower().startswith("done"):
             status.done()
-        elif lst.name != release:
+        elif lst.name is self.IN_PROGRESS_LISTS:
             status.started()
         else:
             # Set started if checklist has completed items
@@ -526,6 +553,9 @@ class ScrumBoard(TrelloBoard):
             for attachment in card.get_attachments():
                 if attachment.is_upload:
                     self.logger.debug(f"Skipping upload")
+                    continue
+                if not attachment.url:
+                    self.logger.debug(f"Skipping no url")
                     continue
                 if attachment.url in skip_cards:
                     self.logger.debug(f"Skipping skip_card: {attachment.url}")
@@ -542,30 +572,23 @@ class ScrumBoard(TrelloBoard):
                     )
                     continue
                 skip_cards.append(card.url)
-                substatus = self.get_card_status(
-                    subcard, release, skip_cards=skip_cards
+                substatus = self._get_card_status(
+                    subcard, release=release, skip_cards=skip_cards
                 )
                 self.logger.debug(f"SubStatus: {substatus}")
                 if substatus != substatus.NOT_STARTED:
                     status.started()
-        try:
-            label = next(filter(lambda x: x.name == release, card.labels))
-            status.set_color(label.color)
-        except TypeError:
-            # Don't set color if there is no release label
-            self.logger.debug(f"Not setting color on status: {card.name}")
-            pass
+        if release:
+            try:
+                label = next(filter(lambda x: x.name == release, card.labels))
+                status.set_color(label.color)
+            except TypeError:
+                # Don't set color if there is no release label
+                self.logger.debug(f"Not setting color on status: {card.name}")
         return status
 
 
-class ScrumFeature:
-    def __init__(self, card, status, release=None):
-        self.name = card.name
-        self.status = status
-        self.release = release
-
-
-class FeatureStatus:
+class ScrumStatus:
     NOT_STARTED = 1
     IN_PROGRESS = 2
     DONE = 3
