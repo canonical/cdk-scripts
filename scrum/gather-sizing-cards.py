@@ -7,15 +7,17 @@ def main():
     utils = CDKUtils()
     # Product Teams
     for team in [
-        "CDK",
+        # "CDK",
+        "Kubeflow",
     ]:
-        team_board = utils.get_team_board(team)
+        scrum_board = utils.get_scrum_board(team)
+        backlog_board = utils.get_backlog_board(team)
         feedback = utils.get_product_feedback(team)
         feedback.add_titles()
         sizing_board = utils.get_sizing_board(team)
-        sizing_board.add_team_cards(team_board.get_features())
-        # sizing_board.add_feedback_cards(feedback.get_features())
-        sizing_board.truncate_lists()
+        sizing_board.add_feature_cards(backlog_board.get_features(attachments=True))
+        sizing_board.add_feature_cards(scrum_board.get_features(attachments=True))
+        # sizing_board.truncate_lists()
 
     # Non-product teams
     # for team in [

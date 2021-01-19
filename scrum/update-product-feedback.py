@@ -6,17 +6,18 @@ from utils import CDKUtils
 def main():
     utils = CDKUtils()
     teams = [
-        "CDK",
+        # "CDK",
+        "Kubeflow",
     ]
     for team in teams:
         # Get boards
-        team_board = utils.get_team_board(team)
+        backlog_board = utils.get_backlog_board(team)
         scrum_board = utils.get_scrum_board(team)
         # Update product feedback
         print(f"Updating Product Feedback: {team}")
         feedback = utils.get_product_feedback(team)
-        features = team_board.get_features(attachments=False)
-        features.extend(scrum_board.get_features(attachments=False))
+        features = backlog_board.get_features()
+        features.extend(scrum_board.get_features())
         feedback.update_features(features)
 
 

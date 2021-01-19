@@ -1,6 +1,6 @@
 import confuse
 from roadmap.gsheets import ProductFeedback, Roadmap
-from roadmap.trello import ScrumBoard, SizingBoard, TeamBoard
+from roadmap.trello import ScrumBoard, SizingBoard, BacklogBoard
 from trello import TrelloClient
 
 
@@ -20,11 +20,11 @@ class CDKUtils:
         )
         return board
 
-    def get_team_board(self, team):
+    def get_backlog_board(self, team):
         """Provide the config key as team"""
-        board = TeamBoard(
+        board = BacklogBoard(
             client=self.client,
-            id=self.config[team]["team_id"].get(str),
+            id=self.config[team]["backlog_id"].get(str),
         )
         return board
 
@@ -36,11 +36,11 @@ class CDKUtils:
         )
         return board
 
-    def get_product_roadmap(self, release):
+    def get_product_roadmap(self, release, team=None):
         return Roadmap(
             key=self.config["Roadmap"]["key"].get(str),
             org=self.config["Roadmap"]["org"].get(str),
-            team=self.config["Roadmap"]["team"].get(str),
+            team=team or self.config["Roadmap"]["team"].get(str),
             release=release,
         )
 

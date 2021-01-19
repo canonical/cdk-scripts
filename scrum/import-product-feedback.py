@@ -7,13 +7,13 @@ def main():
     utils = CDKUtils()
     # Product Teams
     for team in [
-        "CDK",
+        # "CDK",
+        "Kubeflow",
     ]:
-        team_board = utils.get_team_board(team)
+        backlog_board = utils.get_backlog_board(team)
         feedback = utils.get_product_feedback(team)
         feedback.add_titles()
-        team_board.setup_board()
-        team_board.add_feedback_cards(feedback.get_features())
+        backlog_board.add_feedback_cards(feedback.get_features())
 
 
 if __name__ == "__main__":

@@ -6,15 +6,15 @@ from utils import CDKUtils
 def main():
     utils = CDKUtils()
     teams = [
-        "CDK",
+        # "CDK",
         # "Test",
-        # "Kubeflow",
+        "Kubeflow",
         # "MicroK8s",
     ]
     for team in teams:
         board = utils.get_scrum_board(team)
         board.setup_board()
-        board = utils.get_team_board(team)
+        board = utils.get_backlog_board(team)
         board.setup_board()
         board = utils.get_sizing_board(team)
         board.setup_board()

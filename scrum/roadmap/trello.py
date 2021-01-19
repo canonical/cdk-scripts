@@ -16,6 +16,7 @@ class TrelloBoard:
         self._lists = None
         self._labels = None
         self._cards = None
+        self._visible_cards = None
         self._custom_fields = None
         self._epics = []
         self._epic_label = None
@@ -134,15 +135,15 @@ class TrelloBoard:
         """Update story point field from sized_features
         Sized Features will be updated as well as all epics on the board"""
         for feature in sized_features:
-            if not feature.size:
-                self.logger.warn(f"Features {feature.name} has no size")
+            if not feature.story_points:
+                self.logger.warn(f"Features {feature.name} has no story points")
                 continue
             try:
                 card = next(filter(lambda x: x.name == feature.name, self.cards))
             except StopIteration:
                 # Feature doesn't have a card on this board
                 continue
-            if feature.size == self.EPIC_POINTS:
+            if feature.story_points == self.EPIC_POINTS:
                 # check label
                 if not len(
                     [
@@ -156,8 +157,8 @@ class TrelloBoard:
                 # Zero score, calculated at the end
                 card.set_custom_field(str(0), self.sp_field)
                 continue
-            self.logger.debug(f"{type(feature.size)}")
-            card.set_custom_field(str(feature.size), self.sp_field)
+            self.logger.debug(f"{type(feature.story_points)}")
+            card.set_custom_field(str(feature.story_points), self.sp_field)
         self._cards = None
         self._epics = None
         for card in self.epics:
@@ -198,12 +199,13 @@ class TrelloBoard:
         else:
             return points
 
-    def get_features(self, closed=True, attachments=False):
+    def get_features(self, visible=True, attachments=False):
         features = []
-        for card in self.cards:
-            # TODO: Test retrevial based on visibility
-            if card.closed and not closed:
-                continue
+        if visible:
+            cards = self.visible_cards
+        else:
+            cards = self.cards
+        for card in cards:
             features.append(
                 TrelloFeature(
                     card=card,
@@ -220,11 +222,12 @@ class TrelloBoard:
 
 
 class TrelloFeature:
-    def __init__(self, card, status, sp_field, attachments=False):
+    def __init__(self, card, status, sp_field, release=None, attachments=False):
         self.name = card.name
         self.description = card.description
         self.status = status
         self.links = []
+        self.release = release
         self.story_points = None
         self._set_story_points(card, sp_field)
         self.closed = card.closed
@@ -281,79 +284,79 @@ class SizingBoard(TrelloBoard):
                     continue
                 card.delete()
 
-    def add_feedback_cards(
-        self, product_feedback, update_description=False, update_bugs=True
+    def add_feature_cards(
+        self, features, update_description=False, update_links=True
     ):
         """Add missing cards"""
         card_names = [card.name for card in self.cards]
-        for feedback in product_feedback:
-            if feedback.name not in card_names:
+        for feature in features:
+            if feature.name not in card_names:
                 # New card
-                if feedback.story_points:
-                    if feedback.story_points not in self._sizes:
+                if feature.story_points:
+                    if feature.story_points not in self._sizes:
                         list_name = "Epic"
                     else:
-                        list_name = f"Size {feedback.story_points}"
+                        list_name = f"Size {feature.story_points}"
                 else:
                     list_name = f"Unsized"
                 slist = [lst for lst in self.lists if lst.name == list_name][0]
-                self.logger.debug(f"Feature Size: {feedback.story_points}")
+                self.logger.debug(f"Feature Size: {feature.story_points}")
                 self.logger.debug(f"Found List: {slist}")
-                card = slist.add_card(name=feedback.name, desc=feedback.description)
-                for bug in feedback.bugs:
-                    card.attach(url=bug)
-            elif update_description or update_bugs:
+                card = slist.add_card(name=feature.name, desc=feature.description)
+                for link in feature.links:
+                    card.attach(url=link)
+            elif update_description or update_links:
                 # Existing card
-                card = [card for card in self.cards if card.name == feedback.name][0]
-                if update_description and card.description != feedback.description:
-                    card.set_description(feedback.description)
-                if update_bugs and feedback.bugs:
+                card = [card for card in self.cards if card.name == feature.name][0]
+                if update_description and card.description != feature.description:
+                    card.set_description(feature.description)
+                if update_links and feature.links:
                     attachments = card.attachments
-                    for bug in feedback.bugs:
-                        if bug not in [a["url"] for a in attachments]:
-                            card.attach(url=bug)
+                    for link in feature.links:
+                        if link not in [a["url"] for a in attachments]:
+                            card.attach(url=link)
 
-    def add_team_cards(self, team_features):
-        """Add cards from team feautres"""
-        # Team features have all the fields of a Product feature if links are treated
-        # like bugs. For now we'll do the mapping.
-        for feature in team_features:
-            feature.bugs = feature.links
-        self.add_feedback_cards(team_features)
+    # def add_team_cards(self, team_features):
+    #     """Add cards from team feautres"""
+    #     # Team features have all the fields of a Product feature if links are treated
+    #     # like bugs. For now we'll do the mapping.
+    #     for feature in team_features:
+    #         feature.bugs = feature.links
+    #     self.add_feedback_cards(team_features)
 
-    @property
-    def sized_features(self):
-        sized_features = []
-        for card in self.cards:
-            lst = [lst for lst in self.lists if card.list_id == lst.id][0]
-            if "Epic" in lst.name:
-                sized_features.append(
-                    SizedFeature(name=card.name, size=self.EPIC_POINTS)
-                )
-                continue
-            size = lst.name.lstrip("Size").strip()
-            try:
-                size = int(size)
-            except ValueError:
-                size = None
-            self.logger.debug(f"Size: {size}")
-            sized_features.append(SizedFeature(name=card.name, size=size))
-        return sized_features
-
-
-class SizedFeature:
-    def __init__(self, name, size):
-        self.name = name
-        try:
-            self.size = int(size)
-        except TypeError:
-            self.size = None
-
-    def __repr__(self):
-        return f"{self.name}:{self.size}"
+    # @property
+    # def sized_features(self):
+    #     sized_features = []
+    #     for card in self.cards:
+    #         lst = [lst for lst in self.lists if card.list_id == lst.id][0]
+    #         if "Epic" in lst.name:
+    #             sized_features.append(
+    #                 SizedFeature(name=card.name, size=self.EPIC_POINTS)
+    #             )
+    #             continue
+    #         size = lst.name.lstrip("Size").strip()
+    #         try:
+    #             size = int(size)
+    #         except ValueError:
+    #             size = None
+    #         self.logger.debug(f"Size: {size}")
+    #         sized_features.append(SizedFeature(name=card.name, size=size))
+    #     return sized_features
 
 
-class TeamBoard(TrelloBoard):
+# class SizedFeature:
+#     def __init__(self, name, size):
+#         self.name = name
+#         try:
+#             self.size = int(size)
+#         except TypeError:
+#             self.size = None
+# 
+#     def __repr__(self):
+#         return f"{self.name}:{self.size}"
+
+
+class BacklogBoard(TrelloBoard):
     FEEDBACK_LIST = "Product Feedback"
     FEEDBACK_LABEL_COLOR = "purple"
     FEEDBACK_LABEL_NAME = "feedback"
@@ -532,7 +535,7 @@ class ScrumBoard(TrelloBoard):
                 continue
             status = self._get_card_status(card, release)
             features.append(
-                TrelloFeature(card=card, status=status, sp_field=self.sp_field)
+                TrelloFeature(card=card, status=status, sp_field=self.sp_field, release=release)
             )
         return features
 
