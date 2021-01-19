@@ -183,7 +183,8 @@ class ProductFeedback:
         self._ws.update(a1_range, [titles.tolist()], major_dimension="COLUMNS")
 
     def update_sizes(self, sized_features):
-        if not self.df["Title"]:
+        self.logger.info("Updating feedback sizes")
+        if type(self.df["Title"]) is None:
             raise ValueError("Title header not found in product feedback")
         title_list = self._df["Title"].tolist()
         size_col = self.df.columns.get_loc("Duration") + 1  # zero based

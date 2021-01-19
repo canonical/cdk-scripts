@@ -3,6 +3,9 @@ from roadmap.logging import Logger
 
 class TrelloBoard:
     STORY_POINTS_FIELD = "sp"
+    EPIC_POINTS = 1000
+    EPIC_LABEL_COLOR = "sky"
+    EPIC_LABEL_NAME = "Epic"
 
     def __init__(self, client, name=None, id=None):
         if not name and not id:
@@ -14,6 +17,8 @@ class TrelloBoard:
         self._labels = None
         self._cards = None
         self._custom_fields = None
+        self._epics = []
+        self._epic_label = None
         self.logger = Logger()
 
     @property
@@ -58,35 +63,137 @@ class TrelloBoard:
         self._custom_fields = self._board.get_custom_field_definitions()
         return self._custom_fields
 
-    def update_sizes(self, sized_features):
+    @property
+    def sp_field(self):
+        """Return the custom story point field"""
+        try:
+            sp = next(
+                filter(lambda x: x.name == self.STORY_POINTS_FIELD, self.custom_fields)
+            )
+        except StopIteration:
+            raise ValueError(
+                f"Custom Field {self.STORY_POINTS_FIELD}"
+                f" not found on {self._board.name}."
+            )
+        return sp
+
+    @property
+    def epic_label(self):
+        if self._epic_label:
+            return self._epic_label
+        try:
+            self._epic_label = next(
+                filter(
+                    lambda x: x.name == self.EPIC_LABEL_NAME
+                    and x.color == self.EPIC_LABEL_COLOR,
+                    self.labels,
+                )
+            )
+        except StopIteration:
+            raise ValueError(
+                f"Label {self.EPIC_LABEL_NAME}" f" not found on {self._board.name}."
+            )
+
+        return self._epic_label
+
+    @property
+    def epics(self):
+        """Return all carts with the epic label"""
+        if self._epics:
+            return self._epics
+        self._epics = []
+        for card in self.cards:
+            try:
+                next(filter(lambda x: x.name == self.epic_label.name, card.labels))
+                self._epics.append(card)
+            except (StopIteration, TypeError):
+                # No epic labels or no labels at all
+                pass
+        return self._epics
+
+    def setup_board(self):
+        try:
+            epic_label = self.epic_label  # noqa: F841
+        except ValueError:
+            self._board.add_label(self.EPIC_LABEL_NAME, self.EPIC_LABEL_COLOR)
+            self._labels = None  # clear cache
+
+    def update_sizes(self, sized_features=[]):
         """Update story point field from sized_features"""
         for feature in sized_features:
             if not feature.size:
+                self.logger.warn(f"Features {feature.name} has no size")
                 continue
             try:
                 card = next(filter(lambda x: x.name == feature.name, self.cards))
             except StopIteration:
                 # Feature doesn't have a card on this board
                 continue
-            try:
-                sp = next(
-                    filter(
-                        lambda x: x.name == self.STORY_POINTS_FIELD, self.custom_fields
-                    )
-                )
-            except StopIteration:
-                raise ValueError(
-                    f"Custom Field {self.STORY_POINTS_FIELD}"
-                    " not found on {self.board.name}."
-                )
+            if feature.size == self.EPIC_POINTS:
+                # check label
+                if not len(
+                    [
+                        label
+                        for label in card.labels
+                        if label.name == self.EPIC_LABEL_NAME
+                        and label.color == self.EPIC_LABEL_COLOR
+                    ]
+                ):
+                    card.add_label(self.epic_label)
+                # Zero score, calculated at the end
+                card.set_custom_field(str(0), self.sp_field)
+                continue
             self.logger.debug(f"{type(feature.size)}")
-            card.set_custom_field(feature.size, sp)
+            card.set_custom_field(str(feature.size), self.sp_field)
+        self._cards = None
+        self._epics = None
+        for card in self.epics:
+            points = self._get_points(card)
+            card.set_custom_field(str(points), self.sp_field)
+        self._cards = None
+        self._epics = None
+
+    def _get_points(self, card, skip_cards=[]):
+        """Recursively sum story points for card"""
+        points = 0
+        for field in card.custom_fields:
+            if field.name == self.STORY_POINTS_FIELD:
+                points = int(field.value)
+        subpoints_list = []
+        for attachment in card.get_attachments():
+            if attachment.is_upload:
+                self.logger.debug(f"Skipping upload")
+                continue
+            if attachment.url in skip_cards:
+                self.logger.debug(f"Skipping skip_card: {attachment.url}")
+                continue
+            self.logger.debug(f"Searching: {attachment.url}")
+            try:
+                subcard = next(filter(lambda x: x.url == attachment.url, self.cards))
+            except StopIteration:
+                # Card not found on this board
+                self.logger.debug(
+                    f"Attachment not card on this board board: {attachment.url}"
+                )
+                continue
+            skip_cards.append(card.url)
+            subpoints = self._get_points(subcard, skip_cards=skip_cards)
+            self.logger.debug(f"Subpoints: {subpoints}")
+            subpoints_list.append(subpoints)
+        if subpoints_list:
+            return sum(subpoints_list, points)
+        else:
+            return points
 
 
 class SizingBoard(TrelloBoard):
     def __init__(self, *args, sizes=[1, 2, 3, 5, 8, 13, 21], **kwargs):
         super().__init__(*args, **kwargs)
         self._sizes = sizes
+
+    def setup_board(self):
+        super().setup_board()
+        self.setup_lists()
 
     def setup_lists(self):
         all_lists = self._board.all_lists()
@@ -161,7 +268,9 @@ class SizingBoard(TrelloBoard):
         for card in self.cards:
             lst = [lst for lst in self.lists if card.list_id == lst.id][0]
             if "Epic" in lst.name:
-                # TODO: Sum up size of all attached cards
+                sized_features.append(
+                    SizedFeature(name=card.name, size=self.EPIC_POINTS)
+                )
                 continue
             size = lst.name.lstrip("Size").strip()
             try:
@@ -186,29 +295,112 @@ class SizedFeature:
 
 
 class TeamBoard(TrelloBoard):
-    STORY_POINTS_FIELD = "sp"
+    FEEDBACK_LIST = "Product Feedback"
+    FEEDBACK_LABEL_COLOR = "purple"
+    FEEDBACK_LABEL_NAME = "feedback"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._feedback_list = None
+        self._feedback_label = None
 
-    def get_features(self, only_visible=True):
+    @property
+    def feedback_list(self):
+        if self._feedback_list:
+            return self._feedback_list
+        self._feedback_list = [
+            lst for lst in self.lists if lst.name == self.FEEDBACK_LIST
+        ][0]
+        return self._feedback_list
+
+    @property
+    def feedback_label(self):
+        if self._feedback_label:
+            return self._feedback_label
+        self._feedback_label = next(
+            filter(
+                lambda x: x.name == self.FEEDBACK_LABEL_NAME
+                and x.color == self.FEEDBACK_LABEL_COLOR,
+                self.labels,
+            )
+        )
+        return self._feedback_label
+
+    def add_feedback_cards(
+        self, product_feedback, update_description=False, update_bugs=True
+    ):
+        """Add missing cards"""
+        card_names = [card.name for card in self.cards]
+        for feedback in product_feedback:
+            if feedback.name not in card_names:
+                # New card
+                card = self.feedback_list.add_card(
+                    name=feedback.name,
+                    desc=feedback.description,
+                    labels=[self.feedback_label],
+                )
+                for bug in feedback.bugs:
+                    card.attach(url=bug)
+                if feedback.story_points:
+                    card.set_custom_field(str(feedback.story_points), self.sp_field)
+            elif update_description or update_bugs:
+                # Existing card
+                card = [card for card in self.cards if card.name == feedback.name][0]
+                if update_description and card.description != feedback.description:
+                    card.set_description(feedback.description)
+                if update_bugs and feedback.bugs:
+                    attachments = card.attachments
+                    for bug in feedback.bugs:
+                        if bug not in [a["url"] for a in attachments]:
+                            card.attach(url=bug)
+        self._cards = None  # Clear cache
+
+    def setup_board(self):
+        super().setup_board()
+        try:
+            feedback_list = self.feedback_list  # noqa: F841
+        except IndexError:
+            self._board.add_list(self.FEEDBACK_LIST)
+            self._lists = None  # clear cache
+
+        try:
+            feedback_label = self.feedback_label  # noqa: F841
+        except StopIteration:
+            self._board.add_label(self.FEEDBACK_LABEL_NAME, self.FEEDBACK_LABEL_COLOR)
+            self._labels = None  # clear cache
+
+    def get_features(self, only_visible=True, attachments=True):
         features = []
         for card in self.cards:
+            # TODO: Test retrevial based on visibility
             if only_visible and not card.closed:
-                features.append(TeamFeature(card=card))
+                features.append(
+                    TeamFeature(
+                        card=card, sp_field=self.sp_field, attachments=attachments
+                    )
+                )
+            elif not only_visible:
+                features.append(TeamFeature(card=card, attachments=attachments))
         return features
 
 
 class TeamFeature:
-    def __init__(self, card):
+    def __init__(self, card, sp_field=None, attachments=False):
         self.name = card.name
         self.description = card.description
         self.links = []
-        # TODO Check for a custom_field for story points
         self.story_points = None
-        for attachment in card.get_attachments():
-            if attachment.url:
-                self.links.append(attachment.url)
+        if sp_field:
+            for field in card.custom_fields:
+                if field.name == sp_field.name:
+                    self.story_points = int(field.value)
+        # TODO: consider combining Features and SizedFeature for a single class
+        self.size = self.story_points
+
+        if attachments:
+            for attachment in card.get_attachments():
+                if attachment.url:
+                    self.links.append(attachment.url)
 
 
 class ScrumBoard(TrelloBoard):
@@ -349,8 +541,9 @@ class ScrumBoard(TrelloBoard):
                         f"Attachment not card on this board board: {attachment.url}"
                     )
                     continue
+                skip_cards.append(card.url)
                 substatus = self.get_card_status(
-                    subcard, release, skip_cards=skip_cards.append(card.url)
+                    subcard, release, skip_cards=skip_cards
                 )
                 self.logger.debug(f"SubStatus: {substatus}")
                 if substatus != substatus.NOT_STARTED:
