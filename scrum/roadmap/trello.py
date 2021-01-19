@@ -227,6 +227,7 @@ class TrelloFeature:
         self.links = []
         self.story_points = None
         self._set_story_points(card, sp_field)
+        self.closed = card.closed
         if attachments:
             self._set_attachments(card)
 
@@ -430,7 +431,6 @@ class TeamBoard(TrelloBoard):
 
 class ScrumBoard(TrelloBoard):
     IN_PROGRESS_LISTS = ["In Progress", "In Review", "Blocked"]
-    DONE_LIST = "Done"
     RELEASE_COLORS = ["green", "blue", "orange", "red", "black"]
 
     def __init__(self, *args, product_categories=[], **kwargs):
@@ -568,7 +568,7 @@ class ScrumBoard(TrelloBoard):
                 except StopIteration:
                     # Card not found on this board
                     self.logger.debug(
-                        f"Attachment not card on this board board: {attachment.url}"
+                        f"Attachment not card on this board: {attachment.url}"
                     )
                     continue
                 skip_cards.append(card.url)

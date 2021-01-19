@@ -24,8 +24,9 @@ def main():
         # Update product feedback
         print("Updating Product Feedback")
         feedback = utils.get_product_feedback(team)
-        feedback.update_sizes(team_board.get_features(attachments=False))
-        # feedback.update_sizes(sized_features)
+        feature_sizes = team_board.get_features(attachments=False)
+        feature_sizes.extend(scrum_board.get_features(attachments=False))
+        feedback.update_features(feature_sizes)
 
 
 if __name__ == "__main__":

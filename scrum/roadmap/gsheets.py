@@ -129,6 +129,9 @@ class Roadmap:
 
 
 class ProductFeedback:
+    RESOLVED_COLUMN = "Resolved"
+    SIZE_COLUMN = "Duration"
+
     def __init__(self, key, product):
         self.logger = Logger()
         self._client = gspread.oauth()
@@ -182,20 +185,29 @@ class ProductFeedback:
         # Update sheet
         self._ws.update(a1_range, [titles.tolist()], major_dimension="COLUMNS")
 
-    def update_sizes(self, sized_features):
+    def update_features(self, sized_features):
         self.logger.info("Updating feedback sizes")
         if type(self.df["Title"]) is None:
             raise ValueError("Title header not found in product feedback")
         title_list = self._df["Title"].tolist()
-        size_col = self.df.columns.get_loc("Duration") + 1  # zero based
+        size_col = self.df.columns.get_loc(self.SIZE_COLUMN) + 1  # zero based
+        status_col = self.df.columns.get_loc(self.RESOLVED_COLUMN) + 1  # zero based
         value_updates = []
         for sized_feature in sized_features:
             # +1 for zero based and 1 to account for header
-            row = title_list.index(sized_feature.name) + 2
-            a1 = gspread.utils.rowcol_to_a1(row, size_col)
+            try:
+                row = title_list.index(sized_feature.name) + 2
+            except ValueError:
+                self.logger.debug(
+                    f"Skipp feature, not on feedback: '{sized_feature.name}'"
+                )
+                # No title
+                continue
+            a1_size = gspread.utils.rowcol_to_a1(row, size_col)
+            # Update size
             value_updates.append(
                 {
-                    "range": a1,
+                    "range": a1_size,
                     "values": [
                         [
                             sized_feature.story_points,
@@ -203,4 +215,30 @@ class ProductFeedback:
                     ],
                 }
             )
+            # Update status
+            a1_status = gspread.utils.rowcol_to_a1(row, status_col)
+            status = self._get_feature_status(sized_feature)
+            value_updates.append(
+                {
+                    "range": a1_status,
+                    "values": [
+                        [
+                            status,
+                        ],
+                    ],
+                }
+            )
         self._ws.batch_update(value_updates)
+
+    def _get_feature_status(self, feature):
+        """Return a status compatible with the gsheet based on a feature"""
+        status = False
+        try:
+            if feature.status.value == feature.DONE:
+                status = True
+        except AttributeError:
+            # Not a Scrum Status
+            pass
+        if feature.closed:
+            status = True
+        return status
