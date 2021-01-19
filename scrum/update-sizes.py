@@ -14,7 +14,7 @@ def main():
         print("Getting sizes from Sizing Board")
         sizing_board = utils.get_sizing_board(team)
         sized_features = sizing_board.get_features()
-        # Update team board
+        # Update backlog board
         print("Updating Backlog")
         backlog_board = utils.get_backlog_board(team)
         backlog_board.update_sizes(sized_features)

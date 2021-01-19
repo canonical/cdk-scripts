@@ -62,11 +62,11 @@ class FeedbackFeature:
         title = self._row.get(self.TITLE_HEADER, "")
         if not len(title):
             title = self.description[:32]
-        return title
+        return title.strip()
 
     @property
     def description(self):
-        return self._row.get(self.DESCRIPTION_HEADER, "")
+        return self._row.get(self.DESCRIPTION_HEADER, "").strip()
 
     @property
     def story_points(self):
