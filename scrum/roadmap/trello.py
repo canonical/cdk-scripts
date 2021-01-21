@@ -284,12 +284,17 @@ class SizingBoard(TrelloBoard):
                     continue
                 card.delete()
 
-    def add_feature_cards(
-        self, features, update_description=False, update_links=True
-    ):
+    def add_feature_cards(self, features, update_description=False, update_links=True):
         """Add missing cards"""
         card_names = [card.name for card in self.cards]
         for feature in features:
+            try:
+                if feature.status.state == feature.status.DONE:
+                    # Don't add completed scrum cards
+                    continue
+            except AttributeError:
+                # No Scrum Status to check
+                pass
             if feature.name not in card_names:
                 # New card
                 if feature.story_points:
@@ -315,45 +320,6 @@ class SizingBoard(TrelloBoard):
                     for link in feature.links:
                         if link not in [a["url"] for a in attachments]:
                             card.attach(url=link)
-
-    # def add_team_cards(self, team_features):
-    #     """Add cards from team feautres"""
-    #     # Team features have all the fields of a Product feature if links are treated
-    #     # like bugs. For now we'll do the mapping.
-    #     for feature in team_features:
-    #         feature.bugs = feature.links
-    #     self.add_feedback_cards(team_features)
-
-    # @property
-    # def sized_features(self):
-    #     sized_features = []
-    #     for card in self.cards:
-    #         lst = [lst for lst in self.lists if card.list_id == lst.id][0]
-    #         if "Epic" in lst.name:
-    #             sized_features.append(
-    #                 SizedFeature(name=card.name, size=self.EPIC_POINTS)
-    #             )
-    #             continue
-    #         size = lst.name.lstrip("Size").strip()
-    #         try:
-    #             size = int(size)
-    #         except ValueError:
-    #             size = None
-    #         self.logger.debug(f"Size: {size}")
-    #         sized_features.append(SizedFeature(name=card.name, size=size))
-    #     return sized_features
-
-
-# class SizedFeature:
-#     def __init__(self, name, size):
-#         self.name = name
-#         try:
-#             self.size = int(size)
-#         except TypeError:
-#             self.size = None
-# 
-#     def __repr__(self):
-#         return f"{self.name}:{self.size}"
 
 
 class BacklogBoard(TrelloBoard):
@@ -433,7 +399,13 @@ class BacklogBoard(TrelloBoard):
 
 
 class ScrumBoard(TrelloBoard):
-    IN_PROGRESS_LISTS = ["In Progress", "In Review", "Blocked"]
+    IN_PROGRESS_LISTS = [
+        "In Progress",
+        "In Review",
+        "Blocked",
+        "Under review",
+        "Review",
+    ]
     RELEASE_COLORS = ["green", "blue", "orange", "red", "black"]
 
     def __init__(self, *args, product_categories=[], **kwargs):
@@ -535,7 +507,9 @@ class ScrumBoard(TrelloBoard):
                 continue
             status = self._get_card_status(card, release)
             features.append(
-                TrelloFeature(card=card, status=status, sp_field=self.sp_field, release=release)
+                TrelloFeature(
+                    card=card, status=status, sp_field=self.sp_field, release=release
+                )
             )
         return features
 
@@ -544,7 +518,7 @@ class ScrumBoard(TrelloBoard):
         status = ScrumStatus()
         if lst.name.lower().startswith("done"):
             status.done()
-        elif lst.name is self.IN_PROGRESS_LISTS:
+        elif lst.name in self.IN_PROGRESS_LISTS:
             status.started()
         else:
             # Set started if checklist has completed items

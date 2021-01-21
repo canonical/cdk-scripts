@@ -7,8 +7,9 @@ def main():
     utils = CDKUtils()
     # Product Teams
     for team in [
-        # "CDK",
+        "CDK",
         "Kubeflow",
+        "MicroK8s",
     ]:
         backlog_board = utils.get_backlog_board(team)
         feedback = utils.get_product_feedback(team)

@@ -6,10 +6,10 @@ from utils import CDKUtils
 def main():
     utils = CDKUtils()
     teams = [
-        # "CDK",
-        # "Test",
+        "CDK",
+        "Test",
         "Kubeflow",
-        # "MicroK8s",
+        "MicroK8s",
     ]
     for team in teams:
         board = utils.get_scrum_board(team)

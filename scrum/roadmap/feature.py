@@ -50,6 +50,7 @@ class FeedbackFeature:
     DESCRIPTION_HEADER = "Description"
     TITLE_HEADER = "Title"
     STORY_POINTS_HEADER = "Duration"
+    LAUNCHPAD_HEADER = "LP"
 
     def __init__(self, product, row):
         self.product = product
@@ -83,7 +84,7 @@ class FeedbackFeature:
     @property
     def bugs(self):
         links = []
-        lp = self._row["LP"]
+        lp = self._row[self.LAUNCHPAD_HEADER]
         if lp:
             for bug in lp.split(","):
                 if self._lp_reg.match(bug):

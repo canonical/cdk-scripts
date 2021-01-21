@@ -77,6 +77,8 @@ class Roadmap:
     def status_to_value(self, status):
         if status.state == status.DONE:
             return "C"
+        else:
+            return ""
 
     def update_features(self, trello_features):
         name_list = (

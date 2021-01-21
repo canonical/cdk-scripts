@@ -19,15 +19,15 @@ def main():
     utils = CDKUtils()
     roadmap = utils.get_product_roadmap(args.release)
     teams = [
-        # "CDK",
-        # "Test",
-        # "MicroK8s",
+        "CDK",
+        "Test",
+        "MicroK8s",
     ]
     scrum_features = []
     for team in teams:
         board = utils.get_scrum_board(team)
         scrum_features.extend(board.get_release_features(args.release))
-    # roadmap.update_features(scrum_features)
+        roadmap.update_features(scrum_features)
 
     team = "Kubeflow"
     roadmap = utils.get_product_roadmap(args.release, team=team)

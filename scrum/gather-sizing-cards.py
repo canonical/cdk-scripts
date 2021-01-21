@@ -1,31 +1,35 @@
 #!/bin/env python3
 
+import argparse
+
 from utils import CDKUtils
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--teams",
+        nargs='*',
+        help="Team names to process",
+    )
+    return parser.parse_args()
 
 
 def main():
     utils = CDKUtils()
+    args = parse_args()
     # Product Teams
-    for team in [
-        # "CDK",
-        "Kubeflow",
-    ]:
+    if args.teams:
+        teams = args.teams
+    else:
+        teams = ["CDK", "Kubeflow", "Test", "MicroK8s"]
+    for team in teams:
         scrum_board = utils.get_scrum_board(team)
         backlog_board = utils.get_backlog_board(team)
-        feedback = utils.get_product_feedback(team)
-        feedback.add_titles()
         sizing_board = utils.get_sizing_board(team)
         sizing_board.add_feature_cards(backlog_board.get_features(attachments=True))
         sizing_board.add_feature_cards(scrum_board.get_features(attachments=True))
         # sizing_board.truncate_lists()
-
-    # Non-product teams
-    # for team in [
-    #     "Test",
-    # ]:
-    #     team_board = utils.get_team_board(team)
-    #     sizing_board = utils.get_sizing_board(team)
-    #     sizing_board.add_team_cards(team_board.get_features())
 
 
 if __name__ == "__main__":
