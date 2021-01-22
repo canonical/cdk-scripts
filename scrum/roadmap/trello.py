@@ -1,3 +1,5 @@
+import datetime
+
 from roadmap.logging import Logger
 
 
@@ -6,6 +8,9 @@ class TrelloBoard:
     EPIC_POINTS = 1000
     EPIC_LABEL_COLOR = "sky"
     EPIC_LABEL_NAME = "Epic"
+    STALE_LABEL_NAME = "Stale"
+    STALE_LABEL_COLOR = "yellow"
+    LISTS = []
 
     def __init__(self, client, name=None, id=None):
         if not name and not id:
@@ -20,6 +25,7 @@ class TrelloBoard:
         self._custom_fields = None
         self._epics = []
         self._epic_label = None
+        self._stale_label = None
         self.logger = Logger()
 
     @property
@@ -35,6 +41,25 @@ class TrelloBoard:
                 self.id = board.id
                 return board
         raise ValueError(f"Board {self.name} not in {all_boards}")
+
+    @property
+    def stale_label(self):
+        if self._stale_label:
+            return self._stale_label
+        try:
+            self._stale_label = next(
+                filter(
+                    lambda x: x.name == self.STALE_LABEL_NAME
+                    and x.color == self.STALE_LABEL_COLOR,
+                    self.labels,
+                )
+            )
+        except StopIteration:
+            raise ValueError(
+                f"Label {self.STALE_LABEL_NAME}" f" not found on {self._board.name}."
+            )
+
+        return self._stale_label
 
     @property
     def lists(self):
@@ -115,7 +140,7 @@ class TrelloBoard:
         if self._epics:
             return self._epics
         self._epics = []
-        for card in self.cards:
+        for card in self.visible_cards:
             try:
                 next(filter(lambda x: x.name == self.epic_label.name, card.labels))
                 self._epics.append(card)
@@ -125,11 +150,63 @@ class TrelloBoard:
         return self._epics
 
     def setup_board(self):
+        # Add epic label
         try:
             epic_label = self.epic_label  # noqa: F841
         except ValueError:
             self._board.add_label(self.EPIC_LABEL_NAME, self.EPIC_LABEL_COLOR)
             self._labels = None  # clear cache
+
+        # Add stale label
+        try:
+            stale_label = self.stale_label  # noqa: F841
+        except ValueError:
+            self._board.add_label(self.STALE_LABEL_NAME, self.STALE_LABEL_COLOR)
+            self._labels = None  # clear cache
+
+        # Add any lists in self.LISTS
+        new_list = False
+        for list in self.LISTS:
+            try:
+                next(filter(lambda x: x.name == list, self.lists))
+            except StopIteration:
+                self._board.add_list(list)
+                new_list = True
+        if new_list:
+            self._lists = None  # clear cache
+
+    def get_stale_cards(self, lists, delta=datetime.timedelta(days=30)):
+        stale_cards = []
+        now = datetime.datetime.now(datetime.timezone.utc)
+        for card in self.visible_cards:
+            for list in self.lists:
+                if list.id == card.list_id:
+                    list_name = list.name
+            if list_name not in lists:
+                # Only processes requetsed lists
+                continue
+            if now - card.date_last_activity > delta:
+                self.logger.debug(f"Delta: {now - card.date_last_activity}")
+                stale_cards.append(card)
+        return stale_cards
+
+    def label_stale_cards(self, lists, delta=datetime.timedelta(days=30)):
+        stale_cards = self.get_stale_cards(lists, delta)
+        for card in stale_cards:
+            try:
+                next(
+                    filter(
+                        lambda x: x.name == self.STALE_LABEL_NAME
+                        and x.color == self.STALE_LABEL_COLOR,
+                        card.labels,
+                    )
+                )
+                # Already labeled
+                self.logger.debug(f"Found existing lable, skipping {card.name}")
+            except (StopIteration, TypeError):
+                # No lables, or no stale label
+                card.add_label(self.stale_label)
+                self.logger.info(f"Labeling Stale Card: {card.name}")
 
     def update_sizes(self, sized_features=[]):
         """Update story point field from sized_features
@@ -139,7 +216,9 @@ class TrelloBoard:
                 self.logger.warn(f"Features {feature.name} has no story points")
                 continue
             try:
-                card = next(filter(lambda x: x.name == feature.name, self.cards))
+                card = next(
+                    filter(lambda x: x.name == feature.name, self.visible_cards)
+                )
             except StopIteration:
                 # Feature doesn't have a card on this board
                 continue
@@ -183,7 +262,9 @@ class TrelloBoard:
                 continue
             self.logger.debug(f"Searching: {attachment.url}")
             try:
-                subcard = next(filter(lambda x: x.url == attachment.url, self.cards))
+                subcard = next(
+                    filter(lambda x: x.url == attachment.url, self.visible_cards)
+                )
             except StopIteration:
                 # Card not found on this board
                 self.logger.debug(
@@ -286,7 +367,7 @@ class SizingBoard(TrelloBoard):
 
     def add_feature_cards(self, features, update_description=False, update_links=True):
         """Add missing cards"""
-        card_names = [card.name for card in self.cards]
+        card_names = [card.name for card in self.visible_cards]
         for feature in features:
             try:
                 if feature.status.state == feature.status.DONE:
@@ -308,11 +389,15 @@ class SizingBoard(TrelloBoard):
                 self.logger.debug(f"Feature Size: {feature.story_points}")
                 self.logger.debug(f"Found List: {slist}")
                 card = slist.add_card(name=feature.name, desc=feature.description)
+                self._cards = None  # clear cache
+                self._visible_cards = None  # clear cache
                 for link in feature.links:
                     card.attach(url=link)
             elif update_description or update_links:
                 # Existing card
-                card = [card for card in self.cards if card.name == feature.name][0]
+                card = [
+                    card for card in self.visible_cards if card.name == feature.name
+                ][0]
                 if update_description and card.description != feature.description:
                     card.set_description(feature.description)
                 if update_links and feature.links:
@@ -326,6 +411,10 @@ class BacklogBoard(TrelloBoard):
     FEEDBACK_LIST = "Product Feedback"
     FEEDBACK_LABEL_COLOR = "purple"
     FEEDBACK_LABEL_NAME = "feedback"
+    LISTS = [
+        "Misc",
+        FEEDBACK_LIST,
+    ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -358,7 +447,7 @@ class BacklogBoard(TrelloBoard):
         self, product_feedback, update_description=False, update_bugs=True
     ):
         """Add missing cards"""
-        card_names = [card.name for card in self.cards]
+        card_names = [card.name for card in self.visible_cards]
         for feedback in product_feedback:
             if feedback.name not in card_names:
                 # New card
@@ -373,7 +462,9 @@ class BacklogBoard(TrelloBoard):
                     card.set_custom_field(str(feedback.story_points), self.sp_field)
             elif update_description or update_bugs:
                 # Existing card
-                card = [card for card in self.cards if card.name == feedback.name][0]
+                card = [
+                    card for card in self.visible_cards if card.name == feedback.name
+                ][0]
                 if update_description and card.description != feedback.description:
                     card.set_description(feedback.description)
                 if update_bugs and feedback.bugs:
@@ -382,14 +473,15 @@ class BacklogBoard(TrelloBoard):
                         if bug not in [a["url"] for a in attachments]:
                             card.attach(url=bug)
         self._cards = None  # Clear cache
+        self._visible_cards = None  # Clear cache
 
     def setup_board(self):
         super().setup_board()
-        try:
-            feedback_list = self.feedback_list  # noqa: F841
-        except IndexError:
-            self._board.add_list(self.FEEDBACK_LIST)
-            self._lists = None  # clear cache
+        # try:
+        #     feedback_list = self.feedback_list  # noqa: F841
+        # except IndexError:
+        #     self._board.add_list(self.FEEDBACK_LIST)
+        #     self._lists = None  # clear cache
 
         try:
             feedback_label = self.feedback_label  # noqa: F841
@@ -411,6 +503,9 @@ class ScrumBoard(TrelloBoard):
     def __init__(self, *args, product_categories=[], **kwargs):
         super().__init__(*args, **kwargs)
         self.product_categories = product_categories
+
+    def setup_board(self):
+        super().setup_board()
 
     def create_release(self, release):
         """Create A new release list"""
@@ -434,7 +529,7 @@ class ScrumBoard(TrelloBoard):
 
     def create_cards(self, roadmap_features):
         """Create cards for a list of roadmap features"""
-        card_names = [card.name for card in self.cards]
+        card_names = [card.name for card in self.visible_cards]
         self.logger.info("Creating roadmap cards")
         for feature in roadmap_features:
             if feature.category not in self.product_categories:
@@ -457,6 +552,7 @@ class ScrumBoard(TrelloBoard):
             self.logger.debug(f"Adding card {feature.name}")
             lst.add_card(name=feature.name, labels=[label], position="bottom")
             self._cards = None  # Clear card cache
+            self._visible_cards = None  # Clear card cache
 
     def tag_release(self, features):
         """Add feature tags to existing cards"""
@@ -468,7 +564,7 @@ class ScrumBoard(TrelloBoard):
                 if label.name == feature.release and label.color == "green"
             ][0]
             self.logger.debug(f"Looking for feature {feature.name}")
-            for card in self.cards:
+            for card in self.visible_cards:
                 if card.name == feature.name:
                     self.logger.debug(f"Found card {card.name}")
                     try:
@@ -484,6 +580,11 @@ class ScrumBoard(TrelloBoard):
                     self.logger.debug(f"Labeling card {card.name}")
                     card.add_label(release_label)
                     break
+
+    def label_stale_cards(self, lists=[], delta=datetime.timedelta(days=30)):
+        if not lists:
+            lists = self.IN_PROGRESS_LISTS
+        super().label_stale_cards(lists, delta)
 
     def get_release_features(self, release, visible=True):
         release_labels = filter(
@@ -540,7 +641,7 @@ class ScrumBoard(TrelloBoard):
                 self.logger.debug(f"Searching: {attachment.url}")
                 try:
                     subcard = next(
-                        filter(lambda x: x.url == attachment.url, self.cards)
+                        filter(lambda x: x.url == attachment.url, self.visible_cards)
                     )
                 except StopIteration:
                     # Card not found on this board
