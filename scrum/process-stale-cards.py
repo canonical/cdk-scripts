@@ -18,7 +18,7 @@ def main():
         scrum_board.logger.set_level("info")
         scrum_board.label_stale_cards()
         scrum_board.logger.set_level("warning")
-        move_delta = datetime.timedelta(days=10)
+        move_delta = datetime.timedelta(days=5)
         inactive_cards = scrum_board.get_stale_cards(
             lists=scrum_board.IN_PROGRESS_LISTS, delta=move_delta
         )
@@ -36,7 +36,7 @@ def main():
                     )
                 )
                 # Card has the stale label
-                print(f"Found inactive and stale card needs moving: {card.name}")
+                print(f"Found inactive and stale card needs moving: {team}:{card.name}")
                 # TODO: Actually move the card
             except (StopIteration, TypeError):
                 # No lables, or no stale label

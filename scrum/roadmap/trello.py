@@ -175,7 +175,7 @@ class TrelloBoard:
         if new_list:
             self._lists = None  # clear cache
 
-    def get_stale_cards(self, lists, delta=datetime.timedelta(days=30)):
+    def get_stale_cards(self, lists, delta=datetime.timedelta(days=5)):
         stale_cards = []
         now = datetime.datetime.now(datetime.timezone.utc)
         for card in self.visible_cards:
@@ -190,7 +190,7 @@ class TrelloBoard:
                 stale_cards.append(card)
         return stale_cards
 
-    def label_stale_cards(self, lists, delta=datetime.timedelta(days=30)):
+    def label_stale_cards(self, lists, delta=datetime.timedelta(days=5)):
         stale_cards = self.get_stale_cards(lists, delta)
         for card in stale_cards:
             try:
@@ -581,7 +581,7 @@ class ScrumBoard(TrelloBoard):
                     card.add_label(release_label)
                     break
 
-    def label_stale_cards(self, lists=[], delta=datetime.timedelta(days=30)):
+    def label_stale_cards(self, lists=[], delta=datetime.timedelta(days=5)):
         if not lists:
             lists = self.IN_PROGRESS_LISTS
         super().label_stale_cards(lists, delta)
