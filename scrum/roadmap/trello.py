@@ -12,10 +12,11 @@ class TrelloBoard:
     STALE_LABEL_COLOR = "yellow"
     LISTS = []
 
-    def __init__(self, client, name=None, id=None):
+    def __init__(self, client, name=None, short_id=None):
         if not name and not id:
-            raise ValueError("Either a board name or id must be provided")
-        self.id = id
+            raise ValueError("Either a board name or short_id must be provided")
+        self.short_id = short_id
+        self.id = None
         self.name = name
         self._client = client
         self._lists = None
@@ -30,9 +31,10 @@ class TrelloBoard:
 
     @property
     def _board(self):
-        if self.id:
-            board = self._client.get_board(self.id)
+        if self.short_id:
+            board = self._client.get_board(self.short_id)
             self.name = board.name
+            self.id = board.id
             return board
 
         all_boards = self._client.list_boards()

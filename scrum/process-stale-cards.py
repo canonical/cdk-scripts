@@ -22,10 +22,10 @@ def main():
         inactive_cards = scrum_board.get_stale_cards(
             lists=scrum_board.IN_PROGRESS_LISTS, delta=move_delta
         )
-        # backlog_board = utils.get_backlog_board(team)
-        # for list in backlog_board.lists:
-        #     if list.name == "Misc":
-        #         inactive_list = list
+        backlog_board = utils.get_backlog_board(team)
+        for list in backlog_board.lists:
+            if list.name == "Misc":
+                inactive_list = list
         for card in inactive_cards:
             try:
                 next(
@@ -36,8 +36,8 @@ def main():
                     )
                 )
                 # Card has the stale label
-                print(f"Found inactive and stale card needs moving: {team}:{card.name}")
-                # TODO: Actually move the card
+                print(f"Found inactive and stale card moving: {team}:{card.name}")
+                card.change_board(backlog_board.id, inactive_list.id)
             except (StopIteration, TypeError):
                 # No lables, or no stale label
                 pass

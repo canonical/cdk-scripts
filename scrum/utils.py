@@ -16,7 +16,7 @@ class CDKUtils:
         board = ScrumBoard(
             client=self.client,
             product_categories=self.config[team]["product_categories"].get(list),
-            id=self.config[team]["scrum_id"].get(str),
+            short_id=self.config[team]["scrum_id"].get(str),
         )
         return board
 
@@ -24,7 +24,7 @@ class CDKUtils:
         """Provide the config key as team"""
         board = BacklogBoard(
             client=self.client,
-            id=self.config[team]["backlog_id"].get(str),
+            short_id=self.config[team]["backlog_id"].get(str),
         )
         return board
 
@@ -32,7 +32,7 @@ class CDKUtils:
         """Provide the config key as team"""
         board = SizingBoard(
             client=self.client,
-            id=self.config[team]["sizing_id"].get(str),
+            short_id=self.config[team]["sizing_id"].get(str),
         )
         return board
 
