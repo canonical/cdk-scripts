@@ -26,6 +26,9 @@ class RepoGroup:
         for repo in self._repos:
             pulls = repo.get_pulls()
             for pull in pulls:
+                if pull.draft:
+                    self.logger.debug(f"Skipping Draft: {pull}")
+                    continue
                 reviews = pull.get_reviews().reversed
                 if not reviews.totalCount:
                     reason = "No review"
