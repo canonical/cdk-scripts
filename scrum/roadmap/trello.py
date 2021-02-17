@@ -500,6 +500,8 @@ class ScrumBoard(TrelloBoard):
         "Under review",
         "Review",
     ]
+    REVIEW_LIST = "In Review"
+    LISTS = [REVIEW_LIST]
     RELEASE_COLORS = ["green", "blue", "orange", "red", "black"]
 
     def __init__(self, *args, product_categories=[], **kwargs):
@@ -508,6 +510,24 @@ class ScrumBoard(TrelloBoard):
 
     def setup_board(self):
         super().setup_board()
+
+    def add_pull(self, pulls):
+        """Create a card to review a pull request"""
+        lst = [lst for lst in self.lists if lst.name == self.REVIEW_LIST][0]
+        existing_cards = [card.name for card in self.visible_cards]
+        for pull in pulls:
+            self.logger.debug(f"Adding card for {pull.url}")
+            name = f'PR Review {pull.url.split("/")[-3]}'
+            desc = f"""{pull.reason}
+                    Url: {pull.url}
+                    {pull.body}"""
+            if name in existing_cards:
+                self.logger.debug(f"Skipping, card already exists")
+                continue
+            card = lst.add_card(name=name, desc=desc, position="bottom")
+            card.attach(url=pull.url)
+        self._cards = None  # Clear card cache
+        self._visible_cards = None  # Clear card cache
 
     def create_release(self, release):
         """Create A new release list"""

@@ -1,6 +1,7 @@
 import confuse
+from roadmap.github import RepoGroup
 from roadmap.gsheets import ProductFeedback, Roadmap
-from roadmap.trello import ScrumBoard, SizingBoard, BacklogBoard
+from roadmap.trello import BacklogBoard, ScrumBoard, SizingBoard
 from trello import TrelloClient
 
 
@@ -49,3 +50,15 @@ class CDKUtils:
             key=self.config["Feedback"]["key"].get(str),
             product=self.config[team]["feedback_product"].get(str),
         )
+
+    def get_repo_group(self, team):
+        """Returns a RepoGroup for a given team based on team config"""
+        gh_org = None
+        gh_team = None
+        gh_org = self.config[team]["github_org"].get(str)
+        if self.config[team]["github_team"].exists():
+            gh_team = self.config[team]["github_team"].get(list)
+        rg = RepoGroup(
+            self.config["Github"]["api_key"].get(str), org=gh_org, team=gh_team
+        )
+        return rg
