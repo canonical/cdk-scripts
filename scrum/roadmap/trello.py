@@ -524,6 +524,7 @@ class ScrumBoard(TrelloBoard):
             if name in existing_cards:
                 self.logger.debug(f"Skipping, card already exists")
                 continue
+            self.logger.info(f"Added card for: {pull.url}")
             card = lst.add_card(name=name, desc=desc, position="bottom")
             card.attach(url=pull.url)
         self._cards = None  # Clear card cache

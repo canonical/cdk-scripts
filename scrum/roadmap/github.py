@@ -24,6 +24,7 @@ class RepoGroup:
         else:
             review_members = self._org.get_members()
         for repo in self._repos:
+            self.logger.info(f"Checking: {repo}")
             pulls = repo.get_pulls()
             for pull in pulls:
                 if pull.draft:
