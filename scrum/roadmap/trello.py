@@ -517,12 +517,12 @@ class ScrumBoard(TrelloBoard):
         existing_cards = [card.name for card in self.visible_cards]
         for pull in pulls:
             self.logger.debug(f"Adding card for {pull.url}")
-            name = f'PR Review {pull.url.split("/")[-3]}'
+            name = f'PR Review {pull.url.split("/")[-3]} #{pull.number}'
             desc = f"""{pull.reason}
                     Url: {pull.url}
                     {pull.body}"""
             if name in existing_cards:
-                self.logger.debug(f"Skipping, card already exists")
+                self.logger.debug(f"Skipping, card already exists: {name}")
                 continue
             self.logger.info(f"Added card for: {pull.url}")
             card = lst.add_card(name=name, desc=desc, position="bottom")

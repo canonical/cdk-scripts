@@ -61,3 +61,4 @@ class PullRequest:
         self.url = pull.html_url
         self.title = pull.title
         self.body = pull.body
+        self.number = pull.number
