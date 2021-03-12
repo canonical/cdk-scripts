@@ -1,6 +1,6 @@
 #!/bin/env python3
 
-from scrum.utils import CDKUtils
+from utils import CDKUtils
 
 
 def main():
