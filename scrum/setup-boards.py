@@ -7,7 +7,6 @@ def main():
     utils = CDKUtils()
     teams = [
         "CDK",
-        "Test",
         "Kubeflow",
         "MicroK8s",
     ]

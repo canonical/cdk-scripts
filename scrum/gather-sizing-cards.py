@@ -32,7 +32,7 @@ def main():
     if args.teams:
         teams = args.teams
     else:
-        teams = ["CDK", "Kubeflow", "Test", "MicroK8s"]
+        teams = ["CDK", "Kubeflow", "MicroK8s"]
     if args.board:
         boards = args.board
     else:

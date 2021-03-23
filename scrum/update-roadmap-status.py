@@ -20,7 +20,6 @@ def main():
     roadmap = utils.get_product_roadmap(args.release)
     teams = [
         "CDK",
-        "Test",
         "MicroK8s",
     ]
     scrum_features = []

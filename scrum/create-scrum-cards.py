@@ -21,7 +21,6 @@ def main():
     roadmap_features = roadmap.get_features()
     teams = [
         "CDK",
-        "Test",
         "MicroK8s",
     ]
     for team in teams:
