@@ -226,7 +226,7 @@ class TrelloBoard:
                 continue
             if feature.story_points == self.EPIC_POINTS:
                 # check label
-                if not len(
+                if not card.labels or not len(
                     [
                         label
                         for label in card.labels
@@ -241,12 +241,67 @@ class TrelloBoard:
             self.logger.debug(f"{type(feature.story_points)}")
             card.set_custom_field(str(feature.story_points), self.sp_field)
         self._cards = None
+        self._visible_cards = None
         self._epics = None
         for card in self.epics:
             points = self._get_points(card)
             card.set_custom_field(str(points), self.sp_field)
         self._cards = None
         self._epics = None
+
+    def _url_from_name(self, name):
+        """Return the url for a card by name, if it is on this board"""
+        self.logger.debug(f"Searching for card: {name}")
+        for card in self.visible_cards:
+            if card.name == name:
+                self.logger.debug(f"Found card: {name}")
+                return card.url
+        return None
+
+    def update_features(self, features, new_list=None):
+        """Update features on this board, if new_list is provided add new cards to that
+        list, otherwise skip new cards"""
+        card_names = [card.name for card in self.visible_cards]
+        for feature in features:
+            if feature.name not in card_names:
+                # New card
+                if not new_list:
+                    self.logger.debug(f"Skipping feature, not on board: {feature.name}")
+                    continue
+                nlist = [lst for lst in self.lists if lst.name == new_list][0]
+                self.logger.debug(f"Creating card in list: {nlist}")
+                card = nlist.add_card(name=feature.name, desc=feature.description)
+                self._cards = None  # clear cache
+                self._visible_cards = None  # clear cache
+                for attachment in feature.attachments:
+                    self.logger.debug(f"Checking Attachment: {attachment}")
+                    if attachment.name:
+                        self.logger.debug(f"Searching for card: {attachment.name}")
+                        url = self._url_from_name(attachment.name)
+                        if url:
+                            self.logger.debug(f"Found card: {attachment.name}")
+                            card.attach(url=url)
+                    elif attachment.url:
+                        self.logger.debug(f"Attaching: {attachment.url}")
+                        card.attach(url=attachment.url)
+            else:
+                # Existing card
+                card = [
+                    card for card in self.visible_cards if card.name == feature.name
+                ][0]
+                if card.description != feature.description:
+                    self.logger.debug(f"Updating description on: {card.name}")
+                    card.set_description(feature.description)
+                if feature.attachments:
+                    existing = card.attachments
+                    for attachment in feature.attachments:
+                        if attachment.name:
+                            url = self._url_from_name(attachment.name)
+                        else:
+                            url = attachment.url
+                        if url and url not in [a["url"] for a in existing]:
+                            self.logger.debug(f"Attaching {url} to {card.name}")
+                            card.attach(url=url)
 
     def _get_points(self, card, skip_cards=[]):
         """Recursively sum story points for card"""
@@ -310,6 +365,7 @@ class TrelloFeature:
         self.description = card.description
         self.status = status
         self.links = []
+        self.attachments = []
         self.release = release
         self.story_points = None
         self._set_story_points(card, sp_field)
@@ -321,6 +377,7 @@ class TrelloFeature:
         for attachment in card.get_attachments():
             if attachment.url:
                 self.links.append(attachment.url)
+            self.attachments.append(attachment)
 
     def _set_story_points(self, card, sp_field):
         for field in card.custom_fields:
@@ -407,6 +464,27 @@ class SizingBoard(TrelloBoard):
                     for link in feature.links:
                         if link not in [a["url"] for a in attachments]:
                             card.attach(url=link)
+
+    def get_features(self, *args, **kwargs):
+        for list in sorted(self.lists, key=lambda x: x.name, reverse=True):
+            if list.name == "Unsized":
+                continue
+            if list.name == "Epic":
+                points = self.EPIC_POINTS
+            else:
+                points = list.name.split(" ")[1]
+            for card in list.list_cards_iter():
+                self.logger.debug(f"Setting {self.sp_field} to {points} on {card.name}")
+                card.set_custom_field(str(points), self.sp_field)
+                for attachment in card.get_attachments():
+                    if attachment.url.startswith("https://trello.com"):
+                        self.logger.debug(f"Checking for card: {attachment}")
+                        for subcard in self.visible_cards:
+                            if subcard.url == attachment.url:
+                                self.logger.debug(f"Adding name: {subcard.name}")
+                                card.remove_attachment(attachment.id)
+                                card.attach(name=subcard.name, url=subcard.url)
+        return super().get_features(*args, **kwargs)
 
 
 class BacklogBoard(TrelloBoard):
