@@ -97,6 +97,27 @@ class TrelloBoard:
         return self._visible_cards
 
     @property
+    def epics(self):
+        """Return all cards with the epic label"""
+        if self._epics:
+            return self._epics
+        self._epics = []
+        for card in self.visible_cards:
+            try:
+                next(filter(lambda x: x.name == self.epic_label.name, card.labels))
+                self._epics.append(card)
+            except (StopIteration, TypeError):
+                # No epic labels or no labels at all
+                pass
+        return self._epics
+
+    def _clear_card_cache(self):
+        """Clear caches"""
+        self._visible_cards = None
+        self._cards = None
+        self._epics = None
+
+    @property
     def custom_fields(self):
         if self._custom_fields:
             return self._custom_fields
@@ -135,21 +156,6 @@ class TrelloBoard:
             )
 
         return self._epic_label
-
-    @property
-    def epics(self):
-        """Return all cards with the epic label"""
-        if self._epics:
-            return self._epics
-        self._epics = []
-        for card in self.visible_cards:
-            try:
-                next(filter(lambda x: x.name == self.epic_label.name, card.labels))
-                self._epics.append(card)
-            except (StopIteration, TypeError):
-                # No epic labels or no labels at all
-                pass
-        return self._epics
 
     def setup_board(self):
         # Add epic label
@@ -208,6 +214,7 @@ class TrelloBoard:
             except (StopIteration, TypeError):
                 # No lables, or no stale label
                 card.add_label(self.stale_label)
+                self._clear_card_cache()
                 self.logger.info(f"Labeling Stale Card: {card.name}")
 
     def update_sizes(self, sized_features=[]):
@@ -226,6 +233,7 @@ class TrelloBoard:
                 continue
             if feature.story_points == self.EPIC_POINTS:
                 # check label
+                self.logger.debug(f"Checking epic: {feature.name}")
                 if not card.labels or not len(
                     [
                         label
@@ -234,20 +242,18 @@ class TrelloBoard:
                         and label.color == self.EPIC_LABEL_COLOR
                     ]
                 ):
+                    self.logger.debug(f"Labeling epic: {feature.name}")
                     card.add_label(self.epic_label)
+                    self._clear_card_cache()
                 # Zero score, calculated at the end
                 card.set_custom_field(str(0), self.sp_field)
+                self._clear_card_cache()
                 continue
-            self.logger.debug(f"{type(feature.story_points)}")
             card.set_custom_field(str(feature.story_points), self.sp_field)
-        self._cards = None
-        self._visible_cards = None
-        self._epics = None
         for card in self.epics:
             points = self._get_points(card)
             card.set_custom_field(str(points), self.sp_field)
-        self._cards = None
-        self._epics = None
+        self._clear_card_cache()
 
     def _url_from_name(self, name):
         """Return the url for a card by name, if it is on this board"""
@@ -271,8 +277,7 @@ class TrelloBoard:
                 nlist = [lst for lst in self.lists if lst.name == new_list][0]
                 self.logger.debug(f"Creating card in list: {nlist}")
                 card = nlist.add_card(name=feature.name, desc=feature.description)
-                self._cards = None  # clear cache
-                self._visible_cards = None  # clear cache
+                self._clear_card_cache()
                 for attachment in feature.attachments:
                     self.logger.debug(f"Checking Attachment: {attachment}")
                     if attachment.name:
@@ -281,9 +286,11 @@ class TrelloBoard:
                         if url:
                             self.logger.debug(f"Found card: {attachment.name}")
                             card.attach(url=url)
+                            self._clear_card_cache()
                     elif attachment.url:
                         self.logger.debug(f"Attaching: {attachment.url}")
                         card.attach(url=attachment.url)
+                        self._clear_card_cache()
             else:
                 # Existing card
                 card = [
@@ -292,6 +299,7 @@ class TrelloBoard:
                 if card.description != feature.description:
                     self.logger.debug(f"Updating description on: {card.name}")
                     card.set_description(feature.description)
+                    self._clear_card_cache()
                 if feature.attachments:
                     existing = card.attachments
                     for attachment in feature.attachments:
@@ -302,6 +310,7 @@ class TrelloBoard:
                         if url and url not in [a["url"] for a in existing]:
                             self.logger.debug(f"Attaching {url} to {card.name}")
                             card.attach(url=url)
+                            self._clear_card_cache()
 
     def _get_points(self, card, skip_cards=[]):
         """Recursively sum story points for card"""
@@ -411,6 +420,7 @@ class SizingBoard(TrelloBoard):
     def clear_board(self):
         for card in self.cards:
             card.delete()
+            self._clear_card_cache()
 
     def truncate_lists(self, len=3):
         """Truncate size lists to max len"""
@@ -423,6 +433,7 @@ class SizingBoard(TrelloBoard):
                 if i < len:
                     continue
                 card.delete()
+                self._clear_card_cache()
 
     def add_feature_cards(self, features, update_description=False, update_links=True):
         """Add missing cards"""
@@ -452,6 +463,7 @@ class SizingBoard(TrelloBoard):
                 self._visible_cards = None  # clear cache
                 for link in feature.links:
                     card.attach(url=link)
+                    self._clear_card_cache()
             elif update_description or update_links:
                 # Existing card
                 card = [
@@ -459,11 +471,13 @@ class SizingBoard(TrelloBoard):
                 ][0]
                 if update_description and card.description != feature.description:
                     card.set_description(feature.description)
+                    self._clear_card_cache()
                 if update_links and feature.links:
                     attachments = card.attachments
                     for link in feature.links:
                         if link not in [a["url"] for a in attachments]:
                             card.attach(url=link)
+                            self._clear_card_cache()
 
     def get_features(self, *args, **kwargs):
         for list in sorted(self.lists, key=lambda x: x.name, reverse=True):
@@ -476,6 +490,7 @@ class SizingBoard(TrelloBoard):
             for card in list.list_cards_iter():
                 self.logger.debug(f"Setting {self.sp_field} to {points} on {card.name}")
                 card.set_custom_field(str(points), self.sp_field)
+                self._clear_card_cache()
                 for attachment in card.get_attachments():
                     if attachment.url.startswith("https://trello.com"):
                         self.logger.debug(f"Checking for card: {attachment}")
@@ -484,6 +499,7 @@ class SizingBoard(TrelloBoard):
                                 self.logger.debug(f"Adding name: {subcard.name}")
                                 card.remove_attachment(attachment.id)
                                 card.attach(name=subcard.name, url=subcard.url)
+                                self._clear_card_cache()
         return super().get_features(*args, **kwargs)
 
 
@@ -538,6 +554,7 @@ class BacklogBoard(TrelloBoard):
                 )
                 for bug in feedback.bugs:
                     card.attach(url=bug)
+                    self._clear_card_cache()
                 if feedback.story_points:
                     card.set_custom_field(str(feedback.story_points), self.sp_field)
             elif update_description or update_bugs:
@@ -547,11 +564,13 @@ class BacklogBoard(TrelloBoard):
                 ][0]
                 if update_description and card.description != feedback.description:
                     card.set_description(feedback.description)
+                    self._clear_card_cache()
                 if update_bugs and feedback.bugs:
                     attachments = card.attachments
                     for bug in feedback.bugs:
                         if bug not in [a["url"] for a in attachments]:
                             card.attach(url=bug)
+                            self._clear_card_cache()
         self._cards = None  # Clear cache
         self._visible_cards = None  # Clear cache
 
@@ -615,8 +634,7 @@ class ScrumBoard(TrelloBoard):
             self.logger.info(f"Added card for: {pull.url}")
             card = lst.add_card(name=name, desc=desc, position="bottom")
             card.attach(url=pull.url)
-        self._cards = None  # Clear card cache
-        self._visible_cards = None  # Clear card cache
+        self._clear_card_cache()
 
     def create_release(self, release):
         """Create A new release list"""
@@ -662,8 +680,7 @@ class ScrumBoard(TrelloBoard):
             ][0]
             self.logger.debug(f"Adding card {feature.name}")
             lst.add_card(name=feature.name, labels=[label], position="bottom")
-            self._cards = None  # Clear card cache
-            self._visible_cards = None  # Clear card cache
+            self._clear_card_cache()
 
     def tag_release(self, features):
         """Add feature tags to existing cards"""
@@ -690,6 +707,7 @@ class ScrumBoard(TrelloBoard):
                         pass
                     self.logger.debug(f"Labeling card {card.name}")
                     card.add_label(release_label)
+                    self._claer_card_cache()
                     break
 
     def label_stale_cards(self, lists=[], delta=datetime.timedelta(days=5)):
