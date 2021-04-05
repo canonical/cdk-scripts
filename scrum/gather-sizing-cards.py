@@ -41,7 +41,7 @@ def main():
     if args.skip:
         skip = args.skip
     else:
-        skip = None
+        skip = ["Reference Materials", "Misc", "Icebox", "In Review"]
     if args.board:
         boards = args.board
     else:
@@ -64,7 +64,7 @@ def main():
             sizing_board.add_feature_cards(
                 backlog_board.get_features(attachments=True, skip=skip)
             )
-        sizing_board.truncate_lists()
+        # sizing_board.truncate_lists()
 
 
 if __name__ == "__main__":

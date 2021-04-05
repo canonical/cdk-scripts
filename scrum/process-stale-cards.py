@@ -17,13 +17,13 @@ def main():
         scrum_board.logger.set_level("info")
         scrum_board.label_stale_cards()
         scrum_board.logger.set_level("warning")
-        move_delta = datetime.timedelta(days=5)
+        move_delta = datetime.timedelta(days=10)
         inactive_cards = scrum_board.get_stale_cards(
             lists=scrum_board.IN_PROGRESS_LISTS, delta=move_delta
         )
         backlog_board = utils.get_backlog_board(team)
         for list in backlog_board.lists:
-            if list.name == "Misc":
+            if list.name == "Backlog":
                 inactive_list = list
         for card in inactive_cards:
             try:

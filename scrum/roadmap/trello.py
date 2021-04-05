@@ -206,7 +206,7 @@ class TrelloBoard:
         if new_list:
             self._lists = None  # clear cache
 
-    def get_stale_cards(self, lists, delta=datetime.timedelta(days=5)):
+    def get_stale_cards(self, lists, delta=datetime.timedelta(days=10)):
         stale_cards = []
         now = datetime.datetime.now(datetime.timezone.utc)
         for card in self.visible_cards:
@@ -504,8 +504,7 @@ class SizingBoard(TrelloBoard):
                     desc=feature.description,
                     labels=labels,
                 )
-                self._cards = None  # clear cache
-                self._visible_cards = None  # clear cache
+                self._clear_card_cache
                 for link in feature.links:
                     card.attach(url=link)
                     self._clear_card_cache()
