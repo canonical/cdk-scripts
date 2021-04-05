@@ -9,8 +9,13 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--teams",
-        nargs='*',
+        nargs="*",
         help="Team names to process",
+    )
+    parser.add_argument(
+        "--skip",
+        nargs="*",
+        help="Columns to skip during gathering from boards",
     )
     parser.add_argument(
         "--board",
@@ -33,6 +38,10 @@ def main():
         teams = args.teams
     else:
         teams = ["CDK", "Kubeflow", "MicroK8s"]
+    if args.skip:
+        skip = args.skip
+    else:
+        skip = None
     if args.board:
         boards = args.board
     else:
@@ -45,13 +54,16 @@ def main():
         if "Scrum" in boards:
             print(f"Gathering from Scrum board for {team}")
             scrum_board = utils.get_scrum_board(team)
-            features = scrum_board.get_features(attachments=True)
+            features = scrum_board.get_features(attachments=True, skip=skip)
             filtered = filter(lambda x: not x.name.startswith("PR Review"), features)
             sizing_board.add_feature_cards(filtered)
         if "Backlog" in boards:
             print(f"Gathring from Backlog board for {team}")
             backlog_board = utils.get_backlog_board(team)
-            sizing_board.add_feature_cards(backlog_board.get_features(attachments=True))
+            backlog_board.logger.set_level("debug")
+            sizing_board.add_feature_cards(
+                backlog_board.get_features(attachments=True, skip=skip)
+            )
         sizing_board.truncate_lists()
 
 

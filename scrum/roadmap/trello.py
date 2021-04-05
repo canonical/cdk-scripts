@@ -10,6 +10,8 @@ class TrelloBoard:
     EPIC_LABEL_NAME = "Epic"
     STALE_LABEL_NAME = "Stale"
     STALE_LABEL_COLOR = "yellow"
+    FEEDBACK_LABEL_COLOR = "purple"
+    FEEDBACK_LABEL_NAME = "feedback"
     LISTS = []
 
     def __init__(self, client, name=None, short_id=None):
@@ -27,6 +29,7 @@ class TrelloBoard:
         self._epics = []
         self._epic_label = None
         self._stale_label = None
+        self._feedback_label = None
         self.logger = Logger()
 
     @property
@@ -111,6 +114,19 @@ class TrelloBoard:
                 pass
         return self._epics
 
+    @property
+    def feedback_label(self):
+        if self._feedback_label:
+            return self._feedback_label
+        self._feedback_label = next(
+            filter(
+                lambda x: x.name == self.FEEDBACK_LABEL_NAME
+                and x.color == self.FEEDBACK_LABEL_COLOR,
+                self.labels,
+            )
+        )
+        return self._feedback_label
+
     def _clear_card_cache(self):
         """Clear caches"""
         self._visible_cards = None
@@ -170,6 +186,13 @@ class TrelloBoard:
             stale_label = self.stale_label  # noqa: F841
         except ValueError:
             self._board.add_label(self.STALE_LABEL_NAME, self.STALE_LABEL_COLOR)
+            self._labels = None  # clear cache
+
+        # Add feedback label
+        try:
+            feedback_label = self.feedback_label  # noqa: F841
+        except StopIteration:
+            self._board.add_label(self.FEEDBACK_LABEL_NAME, self.FEEDBACK_LABEL_COLOR)
             self._labels = None  # clear cache
 
         # Add any lists in self.LISTS
@@ -346,10 +369,22 @@ class TrelloBoard:
         else:
             return points
 
-    def get_features(self, visible=True, attachments=False):
+    def get_features(self, visible=True, attachments=False, skip=None):
         features = []
+        self.logger.debug(f"Getting features skip: {skip}")
         if visible:
-            cards = self.visible_cards
+            if skip:
+                cards = []
+                skip_ids = []
+                for list in self.lists:
+                    if list.name in skip:
+                        skip_ids.append(list.id)
+                        self.logger.info(f"Skipping list: {list.name}")
+                for card in self.visible_cards:
+                    if card.list_id not in skip_ids:
+                        cards.append(card)
+            else:
+                cards = self.visible_cards
         else:
             cards = self.cards
         for card in cards:
@@ -378,6 +413,7 @@ class TrelloFeature:
         self.release = release
         self.story_points = None
         self._set_story_points(card, sp_field)
+        self.labels = card.labels or []
         self.closed = card.closed
         if attachments:
             self._set_attachments(card)
@@ -458,7 +494,16 @@ class SizingBoard(TrelloBoard):
                 slist = [lst for lst in self.lists if lst.name == list_name][0]
                 self.logger.debug(f"Feature Size: {feature.story_points}")
                 self.logger.debug(f"Found List: {slist}")
-                card = slist.add_card(name=feature.name, desc=feature.description)
+                labels = []
+                for label in feature.labels:
+                    if label.name == self.feedback_label.name:
+                        labels = [self.feedback_label]
+                        break
+                card = slist.add_card(
+                    name=feature.name,
+                    desc=feature.description,
+                    labels=labels,
+                )
                 self._cards = None  # clear cache
                 self._visible_cards = None  # clear cache
                 for link in feature.links:
@@ -505,8 +550,8 @@ class SizingBoard(TrelloBoard):
 
 class BacklogBoard(TrelloBoard):
     FEEDBACK_LIST = "Product Feedback"
-    FEEDBACK_LABEL_COLOR = "purple"
-    FEEDBACK_LABEL_NAME = "feedback"
+    # FEEDBACK_LABEL_COLOR = "purple"
+    # FEEDBACK_LABEL_NAME = "feedback"
     LISTS = [
         "Misc",
         FEEDBACK_LIST,
@@ -515,7 +560,7 @@ class BacklogBoard(TrelloBoard):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._feedback_list = None
-        self._feedback_label = None
+        # self._feedback_label = None
 
     @property
     def feedback_list(self):
@@ -526,18 +571,18 @@ class BacklogBoard(TrelloBoard):
         ][0]
         return self._feedback_list
 
-    @property
-    def feedback_label(self):
-        if self._feedback_label:
-            return self._feedback_label
-        self._feedback_label = next(
-            filter(
-                lambda x: x.name == self.FEEDBACK_LABEL_NAME
-                and x.color == self.FEEDBACK_LABEL_COLOR,
-                self.labels,
-            )
-        )
-        return self._feedback_label
+    # @property
+    # def feedback_label(self):
+    #     if self._feedback_label:
+    #         return self._feedback_label
+    #     self._feedback_label = next(
+    #         filter(
+    #             lambda x: x.name == self.FEEDBACK_LABEL_NAME
+    #             and x.color == self.FEEDBACK_LABEL_COLOR,
+    #             self.labels,
+    #         )
+    #     )
+    #     return self._feedback_label
 
     def add_feedback_cards(
         self, product_feedback, update_description=False, update_bugs=True
@@ -576,12 +621,6 @@ class BacklogBoard(TrelloBoard):
 
     def setup_board(self):
         super().setup_board()
-        # try:
-        #     feedback_list = self.feedback_list  # noqa: F841
-        # except IndexError:
-        #     self._board.add_list(self.FEEDBACK_LIST)
-        #     self._lists = None  # clear cache
-
         try:
             feedback_label = self.feedback_label  # noqa: F841
         except StopIteration:
