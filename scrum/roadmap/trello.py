@@ -550,8 +550,6 @@ class SizingBoard(TrelloBoard):
 
 class BacklogBoard(TrelloBoard):
     FEEDBACK_LIST = "Product Feedback"
-    # FEEDBACK_LABEL_COLOR = "purple"
-    # FEEDBACK_LABEL_NAME = "feedback"
     LISTS = [
         "Misc",
         FEEDBACK_LIST,
@@ -560,7 +558,6 @@ class BacklogBoard(TrelloBoard):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._feedback_list = None
-        # self._feedback_label = None
 
     @property
     def feedback_list(self):
@@ -570,19 +567,6 @@ class BacklogBoard(TrelloBoard):
             lst for lst in self.lists if lst.name == self.FEEDBACK_LIST
         ][0]
         return self._feedback_list
-
-    # @property
-    # def feedback_label(self):
-    #     if self._feedback_label:
-    #         return self._feedback_label
-    #     self._feedback_label = next(
-    #         filter(
-    #             lambda x: x.name == self.FEEDBACK_LABEL_NAME
-    #             and x.color == self.FEEDBACK_LABEL_COLOR,
-    #             self.labels,
-    #         )
-    #     )
-    #     return self._feedback_label
 
     def add_feedback_cards(
         self, product_feedback, update_description=False, update_bugs=True
