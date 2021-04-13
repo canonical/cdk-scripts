@@ -8,7 +8,7 @@ def main():
     teams = ["CDK", "MicroK8s", "Kubeflow"]
     for team in teams:
         repo_group = utils.get_repo_group(team)
-        repo_group.logger.set_level("debug")
+        # repo_group.logger.set_level("debug")
         reviews = repo_group.get_unreviewed_pulls()
         scrum_board = utils.get_scrum_board(team)
         scrum_board.add_pull(reviews)

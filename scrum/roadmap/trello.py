@@ -633,13 +633,13 @@ class ScrumBoard(TrelloBoard):
     def add_pull(self, pulls):
         """Create a card to review a pull request"""
         lst = [lst for lst in self.lists if lst.name == self.REVIEW_LIST][0]
-        existing_cards = [card.name for card in self.visible_cards]
+        existing_cards = [card for card in lst.list_cards()]
         existing_urls = []
-        for card in self.visible_cards:
+        for card in existing_cards:
             for attachment in card.attachments:
                 url = attachment.get("url", "")
                 if "/pull/" in url:
-                    self.logger.debug(f"Found existing PR: {url}")
+                    self.logger.debug(f"Found existing PR: {url} on {card.name}")
                     existing_urls.append(url)
         for pull in pulls:
             self.logger.debug(f"Adding card for {pull.url}")
@@ -647,7 +647,7 @@ class ScrumBoard(TrelloBoard):
             desc = f"""{pull.reason}
                     Url: {pull.url}
                     {pull.body}"""
-            if name in existing_cards:
+            if name in [card.name for card in existing_cards]:
                 self.logger.debug(f"Skipping, card already exists: {name}")
                 continue
             elif pull.url in existing_urls:

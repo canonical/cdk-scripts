@@ -26,6 +26,7 @@ class RepoGroup:
         for repo in self._repos:
             self.logger.info(f"Checking: {repo}")
             pulls = repo.get_pulls()
+            self.logger.debug(f"Reviewing: {[pull for pull in pulls]}")
             for pull in pulls:
                 if pull.draft:
                     self.logger.debug(f"Skipping Draft: {pull}")
@@ -52,6 +53,12 @@ class RepoGroup:
                     self.logger.debug(f"Needs Review ({reason}): {pull}")
                     open_reviews.append(PullRequest(pull, reason))
                     continue
+                if team_review.commit_id != commits[0].commit.sha:
+                    reason = "Commit modified"
+                    self.logger.debug(f"Needs Review ({reason}): {pull}")
+                    open_reviews.append(PullRequest(pull, reason))
+                    continue
+                self.logger.debug(f"Skipping: {pull}")
         return open_reviews
 
 
