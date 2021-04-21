@@ -41,7 +41,13 @@ def main():
     if args.skip:
         skip = args.skip
     else:
-        skip = ["Reference Materials", "Misc", "Icebox", "In Review"]
+        skip = [
+            "Reference Materials",
+            "Misc",
+            "Icebox",
+            "In Review",
+            "Product Feedback",
+        ]
     if args.board:
         boards = args.board
     else:

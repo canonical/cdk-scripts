@@ -335,35 +335,42 @@ class TrelloBoard:
                             card.attach(url=url)
                             self._clear_card_cache()
 
-    def _get_points(self, card, skip_cards=[]):
+    def _get_points(self, card, skip_cards=[], depth=1):
         """Recursively sum story points for card"""
         points = 0
+        currnet_depth = 1
         for field in card.custom_fields:
             if field.name == self.STORY_POINTS_FIELD:
                 points = int(field.value)
+        self.logger.debug(f"Getting points for: {card.name}")
         subpoints_list = []
-        for attachment in card.get_attachments():
-            if attachment.is_upload:
-                self.logger.debug(f"Skipping upload")
-                continue
-            if attachment.url in skip_cards:
-                self.logger.debug(f"Skipping skip_card: {attachment.url}")
-                continue
-            self.logger.debug(f"Searching: {attachment.url}")
-            try:
-                subcard = next(
-                    filter(lambda x: x.url == attachment.url, self.visible_cards)
+        if not currnet_depth > depth:
+            # Process attachments
+            for attachment in card.get_attachments():
+                if attachment.is_upload:
+                    self.logger.debug(f"Skipping upload")
+                    continue
+                if attachment.url in skip_cards:
+                    self.logger.debug(f"Skipping skip_card: {attachment.url}")
+                    continue
+                self.logger.debug(f"Searching: {attachment.url}")
+                try:
+                    subcard = next(
+                        filter(lambda x: x.url == attachment.url, self.visible_cards)
+                    )
+                except StopIteration:
+                    # Card not found on this board
+                    self.logger.debug(
+                        f"Attachment not card on this board board: {attachment.url}"
+                    )
+                    continue
+                skip_cards.append(card.url)
+                new_depth = depth - 1
+                subpoints = self._get_points(
+                    subcard, skip_cards=skip_cards, depth=new_depth
                 )
-            except StopIteration:
-                # Card not found on this board
-                self.logger.debug(
-                    f"Attachment not card on this board board: {attachment.url}"
-                )
-                continue
-            skip_cards.append(card.url)
-            subpoints = self._get_points(subcard, skip_cards=skip_cards)
-            self.logger.debug(f"Subpoints: {subpoints}")
-            subpoints_list.append(subpoints)
+                self.logger.debug(f"Subpoints for {card.name}: {subpoints}")
+                subpoints_list.append(subpoints)
         if subpoints_list:
             return sum(subpoints_list, points)
         else:
@@ -393,6 +400,7 @@ class TrelloBoard:
                     card=card,
                     status=self._get_card_status(card),
                     sp_field=self.sp_field,
+                    epic_name=self.EPIC_LABEL_NAME,
                     attachments=attachments,
                 )
             )
@@ -404,7 +412,9 @@ class TrelloBoard:
 
 
 class TrelloFeature:
-    def __init__(self, card, status, sp_field, release=None, attachments=False):
+    def __init__(
+        self, card, status, sp_field, release=None, epic_name="Epic", attachments=False
+    ):
         self.name = card.name
         self.description = card.description
         self.status = status
@@ -415,8 +425,18 @@ class TrelloFeature:
         self._set_story_points(card, sp_field)
         self.labels = card.labels or []
         self.closed = card.closed
+        self.epic = False
+        self._check_epic(card, epic_name)
         if attachments:
             self._set_attachments(card)
+
+    def _check_epic(self, card, epic_name):
+        if not card.labels:
+            return
+        for label in card.labels:
+            if label.name == epic_name:
+                self.epic = True
+                return
 
     def _set_attachments(self, card):
         for attachment in card.get_attachments():
@@ -484,11 +504,10 @@ class SizingBoard(TrelloBoard):
                 pass
             if feature.name not in card_names:
                 # New card
-                if feature.story_points:
-                    if feature.story_points not in self._sizes:
-                        list_name = "Epic"
-                    else:
-                        list_name = f"Size {feature.story_points}"
+                if feature.epic:
+                    list_name = "Epic"
+                elif feature.story_points:
+                    list_name = f"Size {feature.story_points}"
                 else:
                     list_name = f"Unsized"
                 slist = [lst for lst in self.lists if lst.name == list_name][0]
@@ -573,8 +592,10 @@ class BacklogBoard(TrelloBoard):
         """Add missing cards"""
         card_names = [card.name for card in self.visible_cards]
         for feedback in product_feedback:
+            self.logger.debug(f"Checking feedback: {feedback.name}")
             if feedback.name not in card_names:
                 # New card
+                self.logger.debug(f"Creating Card: {feedback.name}")
                 card = self.feedback_list.add_card(
                     name=feedback.name,
                     desc=feedback.description,
@@ -599,8 +620,7 @@ class BacklogBoard(TrelloBoard):
                         if bug not in [a["url"] for a in attachments]:
                             card.attach(url=bug)
                             self._clear_card_cache()
-        self._cards = None  # Clear cache
-        self._visible_cards = None  # Clear cache
+        self._clear_card_cache()
 
     def setup_board(self):
         super().setup_board()

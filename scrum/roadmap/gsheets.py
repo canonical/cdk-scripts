@@ -162,16 +162,21 @@ class ProductFeedback:
             features.append(FeedbackFeature(self._product, feature))
         return features
 
-    def get_features(self, active=True):
+    def get_features(self, active=True, empty=False):
         """Return features"""
         all = self.all_features
         if active:
             result = list(filter(lambda x: not x.resolved, all))
+            self.logger.debug(f"Exporting active features only: {len(result)}")
         else:
             result = all
-        self.logger.debug(f"Active: {active}")
+        if not empty:
+            filtered = list(filter(lambda x: x.name, result))
+            self.logger.debug(f"Exporting titled features only: {len(filtered)}")
+            result = filtered
         return result
 
+    # TODO: Don't overwrite existing titles
     def add_titles(self, words=8):
         # Build series of truncated descriptions
         truncated = (

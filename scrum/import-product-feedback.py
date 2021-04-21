@@ -14,6 +14,7 @@ def main():
         backlog_board = utils.get_backlog_board(team)
         feedback = utils.get_product_feedback(team)
         feedback.add_titles()
+        backlog_board.logger.set_level("debug")
         backlog_board.add_feedback_cards(feedback.get_features())
 
 
