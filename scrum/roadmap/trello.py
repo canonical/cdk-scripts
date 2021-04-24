@@ -292,6 +292,7 @@ class TrelloBoard:
         list, otherwise skip new cards"""
         card_names = [card.name for card in self.visible_cards]
         for feature in features:
+            self.logger.debug(f"Checking feature for import: {feature.name}")
             if feature.name not in card_names:
                 # New card
                 if not new_list:
@@ -324,6 +325,7 @@ class TrelloBoard:
                     card.set_description(feature.description)
                     self._clear_card_cache()
                 if feature.attachments:
+                    self.logger.debug(f"Checking attachments: {feature.name}")
                     existing = card.attachments
                     for attachment in feature.attachments:
                         if attachment.name:
@@ -334,6 +336,16 @@ class TrelloBoard:
                             self.logger.debug(f"Attaching {url} to {card.name}")
                             card.attach(url=url)
                             self._clear_card_cache()
+
+    def add_card(self, name, description, list, points=0):
+        """Add a card from name, descriptoin, and list."""
+        self.logger.debug(f"Searching for list: {list}")
+        nlist = [lst for lst in self.lists if lst.name == list][0]
+        self.logger.debug(f"Creating card in list: {nlist}")
+        card = nlist.add_card(name=name, desc=description)
+        if points:
+            card.set_custom_field(str(points), self.STORY_POINTS_FIELD)
+        self._clear_card_cache()
 
     def _get_points(self, card, skip_cards=[], depth=1):
         """Recursively sum story points for card"""
