@@ -276,6 +276,7 @@ class TrelloBoard:
         for card in self.epics:
             points = self._get_points(card)
             card.set_custom_field(str(points), self.sp_field)
+            self._clear_card_cache()
         self._clear_card_cache()
 
     def _url_from_name(self, name):
@@ -347,14 +348,17 @@ class TrelloBoard:
             card.set_custom_field(str(points), self.STORY_POINTS_FIELD)
         self._clear_card_cache()
 
-    def _get_points(self, card, skip_cards=[], depth=1):
+    def _get_points(self, card, skip_cards=None, depth=1):
         """Recursively sum story points for card"""
+        if not skip_cards:
+            skip_cards = []
         points = 0
         currnet_depth = 1
         for field in card.custom_fields:
             if field.name == self.STORY_POINTS_FIELD:
                 points = int(field.value)
         self.logger.debug(f"Getting points for: {card.name}")
+        self.logger.debug(f"skip_cards: {skip_cards}")
         subpoints_list = []
         if not currnet_depth > depth:
             # Process attachments
@@ -383,9 +387,14 @@ class TrelloBoard:
                 )
                 self.logger.debug(f"Subpoints for {card.name}: {subpoints}")
                 subpoints_list.append(subpoints)
+        self.logger.debug(f"Found points for: {card.name}")
         if subpoints_list:
+            self.logger.debug(
+                f"Returning point results: subpoints: {sum(subpoints_list, points)}"
+            )
             return sum(subpoints_list, points)
         else:
+            self.logger.debug(f"Returning point results: {points}")
             return points
 
     def get_features(self, visible=True, attachments=False, skip=None):
