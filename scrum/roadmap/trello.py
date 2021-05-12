@@ -286,6 +286,8 @@ class TrelloBoard:
             if card.name == name:
                 self.logger.debug(f"Found card: {name}")
                 return card.url
+        self.logger.debug(f"No url for card name: {name}")
+        self.logger.debug(f"Names: {[c.name for c in self.visible_cards]}")
         return None
 
     def update_features(self, features, new_list=None):
@@ -531,8 +533,8 @@ class SizingBoard(TrelloBoard):
                     list_name = f"Size {feature.story_points}"
                 else:
                     list_name = f"Unsized"
-                slist = [lst for lst in self.lists if lst.name == list_name][0]
                 self.logger.debug(f"Feature Size: {feature.story_points}")
+                slist = [lst for lst in self.lists if lst.name == list_name][0]
                 self.logger.debug(f"Found List: {slist}")
                 labels = []
                 for label in feature.labels:

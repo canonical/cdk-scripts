@@ -47,6 +47,8 @@ def main():
             "Icebox",
             "In Review",
             "Product Feedback",
+            "In progress",
+            "Blocked",
         ]
     if args.board:
         boards = args.board
@@ -54,6 +56,7 @@ def main():
         boards = ["Backlog", "Scrum"]
     for team in teams:
         sizing_board = utils.get_sizing_board(team)
+        sizing_board.logger.set_level("debug")
         if args.clean:
             print(f"Clearing Sizing board for {team}")
             sizing_board.clear_board()
