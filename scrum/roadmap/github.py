@@ -13,7 +13,7 @@ class RepoGroup:
             self._team = self._org.get_team_by_slug(team)
             self._repos = self._team.get_repos()
         else:
-            self._repos = self._org.get_repos()
+            self._repos = self._org.get_repos(type='private')
         self.logger = Logger()
 
     def get_unreviewed_pulls(self):
@@ -24,6 +24,9 @@ class RepoGroup:
         else:
             review_members = self._org.get_members()
         for repo in self._repos:
+            if repo.private:
+                self.logger.info(f"Skipping private repo: {repo}")
+                continue
             self.logger.info(f"Checking: {repo}")
             pulls = repo.get_pulls()
             self.logger.debug(f"Reviewing: {[pull for pull in pulls]}")
