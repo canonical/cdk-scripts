@@ -1,8 +1,10 @@
 import confuse
+from trello import TrelloClient
+
 from roadmap.github import RepoGroup
 from roadmap.gsheets import ProductFeedback, Roadmap
+from roadmap.jira import Project
 from roadmap.trello import BacklogBoard, ScrumBoard, SizingBoard
-from trello import TrelloClient
 
 
 class CDKUtils:
@@ -62,3 +64,13 @@ class CDKUtils:
             self.config["Github"]["api_key"].get(str), org=gh_org, team=gh_team
         )
         return rg
+
+    def get_jira_project(self, team):
+        """Returns a jira object for the team"""
+        project = Project(
+            server=self.config["Jira"]["server"].get(str),
+            api_key=self.config["Jira"]["api_key"].get(str),
+            email=self.config["Jira"]["email"].get(str),
+            project=self.config[team]["jira_project"].get(str),
+        )
+        return project
