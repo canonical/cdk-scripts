@@ -43,8 +43,8 @@ def main():
             "Icebox",
             "In Review",
             "Product Feedback",
-            "In progress",
-            "Blocked",
+            # "In progress",
+            # "Blocked",
         ]
     if args.board:
         boards = args.board
@@ -60,8 +60,9 @@ def main():
             print(f"Gathering from Scrum board for {team}")
             scrum_board = utils.get_scrum_board(team)
             features = scrum_board.get_features(attachments=True, skip=skip)
-            filtered = filter(lambda x: not x.name.startswith("PR Review"), features)
-            project.import_trello_issues(filtered)
+            # filtered = filter(lambda x: not x.name.startswith("PR Review"), features)
+            # project.import_trello_issues(filtered)
+            project.import_trello_issues(features)
         # if "Backlog" in boards:
         #     print(f"Gathring from Backlog board for {team}")
         #     backlog_board = utils.get_backlog_board(team)
