@@ -13,7 +13,7 @@ class RepoGroup:
             self._team = self._org.get_team_by_slug(team)
             self._repos = self._team.get_repos()
         else:
-            self._repos = self._org.get_repos(type='private')
+            self._repos = self._org.get_repos(type='public')
         self.logger = Logger()
 
     def get_unreviewed_pulls(self):
