@@ -36,9 +36,17 @@ class Project:
 
     def import_trello_issues(self, issues):
         """Create project issues given trello exports"""
-        issues = list(issues)
+        trello_issues = list(issues)
         all_issues = self.search()
-        for issue in issues:
+        # import pprint
+
+        # for testissue in all_issues:
+        #     if "Leaked systemd units" in testissue.fields.summary:
+        #         pprint.pprint(vars(testissue))
+        #         for link in self._jira.remote_links(testissue.id):
+        #             pprint.pprint(vars(link))
+        #         return
+        for issue in trello_issues:
             fields = {
                 "summary": issue.name,
                 "description": issue.description,
@@ -50,6 +58,7 @@ class Project:
                 # Story only fields
                 if issue.story_points:
                     fields[self.STORY_POINT_FIELD] = float(issue.story_points)
+            # Add labels
             labels = []
             for label in issue.labels:
                 if label.name in self.INCLUDE_LABELS:
@@ -58,15 +67,45 @@ class Project:
                 fields["labels"] = labels
 
             # Update or create issue
+            jira_issue = None
             for existing_issue in all_issues:
                 if existing_issue.fields.summary == issue.name:
                     self.logger.debug(f"Updating existing issue: {issue.name}")
                     existing_issue.update(fields)
+                    jira_issue = existing_issue
                     break
             else:
                 # Create new issue
                 fields["issuetype"] = {"name": "Epic" if issue.epic else "Story"}
-                self.create_issue(fields)
+                jira_issue = self.create_issue(fields)
+
+            # Add links
+            existing_links = self._jira.remote_links(jira_issue.id)
+            for attachment in issue.attachments:
+                if not attachment.url:
+                    # No attachement
+                    continue
+                if attachment.url.startswith("https://trello.com"):
+                    # Jira card link
+                    # these were used in the Jira workflow to simulate epics
+                    continue
+                for link_object in existing_links:
+                    if attachment.url == link_object.raw["object"]["url"]:
+                        # Link exists
+                        self.logger.debug(
+                            f"Not adding existing remote link: {attachment.url}"
+                        )
+                        break
+                else:
+                    # Create link
+                    self.logger.debug(f"Adding remote link: {attachment.url}")
+                    self._jira.add_simple_link(
+                        jira_issue.id,
+                        {
+                            "title": attachment.url,
+                            "url": attachment.url,
+                        },
+                    )
 
         self._link_trello_epics(epics=[issue for issue in issues if issue.epic])
 

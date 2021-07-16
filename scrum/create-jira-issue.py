@@ -32,8 +32,7 @@ def main():
     if args.teams:
         teams = args.teams
     else:
-        teams = ["CDK"]
-        # teams = ["CDK", "Kubeflow", "MicroK8s"]
+        teams = ["CDK", "Kubeflow", "MicroK8s"]
     if args.skip:
         skip = args.skip
     else:
