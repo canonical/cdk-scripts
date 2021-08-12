@@ -21,7 +21,7 @@ class RepoGroup:
 
     def _check_pr(self, pr, members):
         """Check whether a PR should be included or not."""
-        if pr.user in members:
+        if pr.user in members and self._team.name != "Kubeflow":
             return (False, "internal PR")
         if pr.draft:
             return (False, "draft")
