@@ -22,6 +22,12 @@ class IssueTypes:
 
 class Labels:
     EXT_PR = "external-pr"
+    FOLLOW_UP = "follow-up"
+    REVIEW_ACK = "approved"
+    REVIEW_NAK = "changes-requested"
+    MERGE_BLOCKED = "merge-blocked"
+    MERGE_DIRTY = "needs-rebase"
+    MERGE_UNSTABLE = "tests-failing"
 
 
 class Fields:
@@ -76,6 +82,21 @@ class Project:
         sprints.sort(key=attrgetter("startDate"), reverse=True)
         return sprints[0] if sprints else None
 
+    def _build_labels(self, pr):
+        """Build a list of the appropriate labels based on PR state."""
+        labels = [Labels.EXT_PR]
+        if pr.review_state == "APPROVED":
+            labels.append(Labels.REVIEW_ACK)
+        if pr.review_state == "CHANGES_REQUESTED":
+            labels.append(Labels.REVIEW_NAK)
+        if pr.merge_state == "blocked":
+            labels.append(Labels.MERGE_BLOCKED)
+        if pr.merge_state == "dirty":
+            labels.append(Labels.MERGE_DIRTY)
+        if pr.merge_state == "unstable":
+            labels.append(Labels.MERGE_UNSTABLE)
+        return labels
+
     def import_external_prs(self, prs):
         """Create project issues given trello exports"""
         active_sprint = self.sprint("active")
@@ -86,16 +107,18 @@ class Project:
                   for task in self.search(f"labels = {Labels.EXT_PR}")}
         for pr in prs:
             jira_title = f"{pr.title} ({pr.repo_name} #{pr.number})"
+            labels = self._build_labels(pr)
             if issue := issues.get(jira_title):
                 self.logger.debug(f"Found existing issue {issue.key}: {jira_title}")
                 if issue.fields.status.name in {Lanes.REVIEW, Lanes.DONE}:
                     self.move_to_lane(issue, Lanes.TODO)
                     self.add_comment(issue, f"Needs review: {pr.reason}")
+                self.ensure_labels(issue, labels)
             else:
                 issue = self.create_issue({
                     "summary": jira_title,
                     "description": pr.body,
-                    "labels": [Labels.EXT_PR],
+                    "labels": labels,
                     Fields.SPRINT: active_sprint.id,
                     "issuetype": {"name": IssueTypes.TASK},
                 })
@@ -212,6 +235,18 @@ class Project:
         issue = self._jira.create_issue(fields=fields)
         self.logger.debug(f"Created issue {issue.key}: {issue.fields.summary}")
         return issue
+
+    def ensure_labels(self, issue, labels):
+        """Update an existing issue with the provided fields"""
+        if set(labels) == set(issue.fields.labels):
+            return
+        if self.dry_run:
+            self.logger.debug(f"Would update labels {issue.key}:"
+                              f" {issue.fields.labels} -> {labels}")
+            return
+        self.logger.debug(f"Updating issue {issue.key}:"
+                          f" {issue.fields.labels} -> {labels}")
+        issue.update({"labels": labels})
 
     def move_to_lane(self, issue, lane):
         """Move a given issue to a specific lane."""

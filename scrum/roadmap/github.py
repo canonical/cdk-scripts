@@ -22,24 +22,24 @@ class RepoGroup:
     def _check_pr(self, pr, members):
         """Check whether a PR should be included or not."""
         if pr.user in members and self._team.name != "Kubeflow":
-            return (False, "internal PR")
+            return (False, None, "internal PR")
         if pr.draft:
-            return (False, "draft")
+            return (False, None, "draft")
         reviews = pr.get_reviews().reversed
         if not reviews.totalCount:
-            return (True, "no reviews")
+            return (True, None, "no reviews")
         try:
             team_review = next(review
                                for review in reviews
                                if review.user in members
                                and review.submitted_at)
         except StopIteration:
-            return (True, "no team reviews")
+            return (True, None, "no team reviews")
         commits = pr.get_commits().reversed
         if team_review.submitted_at < commits[0].commit.author.date:
-            return (True, "new commits")
+            return (True, team_review.state, "new commits")
         if team_review.commit_id != commits[0].commit.sha:
-            return (True, "updated commits")
+            return (True, team_review.state, "updated commits")
         new_comments = [c
                         for c in chain(pr.get_comments(),
                                        pr.get_issue_comments(),
@@ -51,10 +51,10 @@ class RepoGroup:
                        if r.user not in members
                        and r.submitted_at > team_review.submitted_at]
         if new_comments or new_reviews:
-            return (True, "updated")
+            return (True, team_review.state, "updated")
         if datetime.now() - team_review.submitted_at > timedelta(weeks=1):
-            return (True, "follow-up")
-        return (False, "reviewed")
+            return (True, team_review.state, "follow-up")
+        return (False, None.state, "reviewed")
 
     def _check_repo(self, repo):
         """Check whether a repo should be checked for PRs or not."""
@@ -79,10 +79,10 @@ class RepoGroup:
                 self.logger.info(f"Skipping repo {repo.full_name}: {reason}")
                 continue
             for pull in repo.get_pulls():
-                should_review, reason = self._check_pr(pull, members)
+                should_review, review_state, reason = self._check_pr(pull, members)
                 if should_review:
                     self.logger.debug(f"Needs Review ({reason}): {pull}")
-                    open_reviews.append(PullRequest(pull, repo, reason))
+                    open_reviews.append(PullRequest(pull, repo, review_state, reason))
                 else:
                     self.logger.debug(f"Skipping ({reason}): {pull}")
         num_reviews = len(open_reviews)
@@ -91,8 +91,10 @@ class RepoGroup:
 
 
 class PullRequest:
-    def __init__(self, pull, repo, reason):
+    def __init__(self, pull, repo, review_state, reason):
         self.reason = reason
+        self.review_state = review_state
+        self.merge_state = pull.mergeable_state
         self.url = pull.html_url
         self.title = pull.title
         self.body = pull.body
