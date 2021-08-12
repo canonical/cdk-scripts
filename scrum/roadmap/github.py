@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta
+from itertools import chain
+
 from github import Github
 
 from roadmap.logging import Logger
@@ -16,59 +19,83 @@ class RepoGroup:
             self._repos = self._org.get_repos(type='public')
         self.logger = Logger()
 
-    def get_unreviewed_pulls(self):
-        """Return a list of all unreviewed pulls"""
+    def _check_pr(self, pr, members):
+        """Check whether a PR should be included or not."""
+        if pr.user in members:
+            return (False, "internal PR")
+        if pr.draft:
+            return (False, "draft")
+        reviews = pr.get_reviews().reversed
+        if not reviews.totalCount:
+            return (True, "no reviews")
+        try:
+            team_review = next(review
+                               for review in reviews
+                               if review.user in members
+                               and review.submitted_at)
+        except StopIteration:
+            return (True, "no team reviews")
+        commits = pr.get_commits().reversed
+        if team_review.submitted_at < commits[0].commit.author.date:
+            return (True, "new commits")
+        if team_review.commit_id != commits[0].commit.sha:
+            return (True, "updated commits")
+        new_comments = [c
+                        for c in chain(pr.get_comments(),
+                                       pr.get_issue_comments(),
+                                       pr.get_review_comments())
+                        if c.user not in members
+                        and c.created_at > team_review.submitted_at]
+        new_reviews = [r
+                       for r in reviews
+                       if r.user not in members
+                       and r.submitted_at > team_review.submitted_at]
+        if new_comments or new_reviews:
+            return (True, "updated")
+        if datetime.now() - team_review.submitted_at > timedelta(weeks=1):
+            return (True, "follow-up")
+        return (False, "reviewed")
+
+    def _check_repo(self, repo):
+        """Check whether a repo should be checked for PRs or not."""
+        if repo.private:
+            return (False, "private")
+        if not repo.get_pulls().totalCount:
+            return (False, "no PRs")
+        return (True, None)
+
+    def get_external_prs(self):
+        """Return a list of all PRs submitted by external contributors."""
         open_reviews = []
         if self._team:
-            review_members = self._team.get_members()
+            members = self._team.get_members()
         else:
-            review_members = self._org.get_members()
+            members = self._org.get_members()
         for repo in self._repos:
-            if repo.private:
-                self.logger.info(f"Skipping private repo: {repo}")
+            should_check, reason = self._check_repo(repo)
+            if should_check:
+                self.logger.info(f"Checking repo {repo.full_name}")
+            else:
+                self.logger.info(f"Skipping repo {repo.full_name}: {reason}")
                 continue
-            self.logger.info(f"Checking: {repo}")
-            pulls = repo.get_pulls()
-            self.logger.debug(f"Reviewing: {[pull for pull in pulls]}")
-            for pull in pulls:
-                if pull.draft:
-                    self.logger.debug(f"Skipping Draft: {pull}")
-                    continue
-                reviews = pull.get_reviews().reversed
-                if not reviews.totalCount:
-                    reason = "No review"
+            for pull in repo.get_pulls():
+                should_review, reason = self._check_pr(pull, members)
+                if should_review:
                     self.logger.debug(f"Needs Review ({reason}): {pull}")
-                    open_reviews.append(PullRequest(pull, reason))
-                    continue
-                team_review = None
-                for review in reviews:
-                    if review.user in review_members:
-                        team_review = review
-                        break
-                if not team_review:
-                    reason = "No team review"
-                    self.logger.debug(f"Needs Review ({reason}): {pull}")
-                    open_reviews.append(PullRequest(pull, reason))
-                    continue
-                commits = pull.get_commits().reversed
-                if team_review.submitted_at < commits[0].commit.author.date:
-                    reason = "New commits"
-                    self.logger.debug(f"Needs Review ({reason}): {pull}")
-                    open_reviews.append(PullRequest(pull, reason))
-                    continue
-                if team_review.commit_id != commits[0].commit.sha:
-                    reason = "Commit modified"
-                    self.logger.debug(f"Needs Review ({reason}): {pull}")
-                    open_reviews.append(PullRequest(pull, reason))
-                    continue
-                self.logger.debug(f"Skipping: {pull}")
+                    open_reviews.append(PullRequest(pull, repo, reason))
+                else:
+                    self.logger.debug(f"Skipping ({reason}): {pull}")
+        num_reviews = len(open_reviews)
+        self.logger.debug(f"Found {num_reviews} PR{'s' if num_reviews != 1 else ''}")
         return open_reviews
 
 
 class PullRequest:
-    def __init__(self, pull, reason=None):
+    def __init__(self, pull, repo, reason):
         self.reason = reason
         self.url = pull.html_url
         self.title = pull.title
         self.body = pull.body
         self.number = pull.number
+        self.status = pull.state
+        self.repo_name = repo.name
