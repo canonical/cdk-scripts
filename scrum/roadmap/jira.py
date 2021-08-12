@@ -85,6 +85,8 @@ class Project:
     def _build_labels(self, pr):
         """Build a list of the appropriate labels based on PR state."""
         labels = [Labels.EXT_PR]
+        if pr.reason == "follow-up":
+            labels.append(Labels.FOLLOW_UP)
         if pr.review_state == "APPROVED":
             labels.append(Labels.REVIEW_ACK)
         if pr.review_state == "CHANGES_REQUESTED":

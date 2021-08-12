@@ -11,6 +11,7 @@ class RepoGroup:
         self._github = Github(api_key)
         self._repos = []
         self._team = None
+        self._team_name = team
         self._org = self._github.get_organization(org)
         if team:
             self._team = self._org.get_team_by_slug(team)
@@ -21,7 +22,7 @@ class RepoGroup:
 
     def _check_pr(self, pr, members):
         """Check whether a PR should be included or not."""
-        if pr.user in members and self._team.name != "Kubeflow":
+        if pr.user in members and self._team_name != "Kubeflow":
             return (False, None, "internal PR")
         if pr.draft:
             return (False, None, "draft")
