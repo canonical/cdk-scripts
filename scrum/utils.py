@@ -8,16 +8,19 @@ from roadmap.trello import BacklogBoard, ScrumBoard, SizingBoard
 
 
 class CDKUtils:
-    def __init__(self):
+    def __init__(self, dry_run=False):
         self.config = confuse.Configuration("cdk-scripts")
-        self.client = TrelloClient(
+        self.dry_run = dry_run
+
+    def get_trello_client(self):
+        return TrelloClient(
             self.config["Trello"]["api_key"].get(str),
             self.config["Trello"]["api_secret"].get(str),
         )
 
     def get_scrum_board(self, team):
         board = ScrumBoard(
-            client=self.client,
+            client=self.get_trello_client(),
             product_categories=self.config[team]["product_categories"].get(list),
             short_id=self.config[team]["scrum_id"].get(str),
         )
@@ -26,7 +29,7 @@ class CDKUtils:
     def get_backlog_board(self, team):
         """Provide the config key as team"""
         board = BacklogBoard(
-            client=self.client,
+            client=self.get_trello_client(),
             short_id=self.config[team]["backlog_id"].get(str),
         )
         return board
@@ -34,7 +37,7 @@ class CDKUtils:
     def get_sizing_board(self, team):
         """Provide the config key as team"""
         board = SizingBoard(
-            client=self.client,
+            client=self.get_trello_client(),
             short_id=self.config[team]["sizing_id"].get(str),
         )
         return board
@@ -72,5 +75,6 @@ class CDKUtils:
             api_key=self.config["Jira"]["api_key"].get(str),
             email=self.config["Jira"]["email"].get(str),
             project=self.config[team]["jira_project"].get(str),
+            dry_run=self.dry_run,
         )
         return project
