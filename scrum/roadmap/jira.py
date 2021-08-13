@@ -150,7 +150,7 @@ class Project:
             else:
                 # Story only fields
                 if issue.story_points:
-                    fields[fields.STORY_POINT] = float(issue.story_points)
+                    fields[Fields.STORY_POINT] = float(issue.story_points)
             # Add labels
             labels = []
             for label in issue.labels:
