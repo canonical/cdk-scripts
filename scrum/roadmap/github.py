@@ -55,7 +55,7 @@ class RepoGroup:
             return (True, team_review.state, "updated")
         if datetime.now() - team_review.submitted_at > timedelta(weeks=1):
             return (True, team_review.state, "follow-up")
-        return (False, None.state, "reviewed")
+        return (False, team_review.state, "reviewed")
 
     def _check_repo(self, repo):
         """Check whether a repo should be checked for PRs or not."""
