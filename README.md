@@ -77,5 +77,5 @@ https://id.atlassian.com/manage-profile/security/api-tokens
 You should use Poetry to run the scripts as well:
 
 ```bash
-poetry run scrum/check-pr.py --teams CDK,Kubeflow
+poetry run scrum/check-pr.py --teams CDK Kubeflow
 ```
