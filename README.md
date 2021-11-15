@@ -11,7 +11,7 @@ poetry install
 Some of the scripts require configuration to use. The most recently developed scripts for automating the team scrum are in the scrum folder. These
 scripts utilize utils.py to provide a common entry point to configure team specific values. This includes API Keys, Trello Boards, and several
 other parameters. This script is using python confuse for yaml configuration input. The search path for the configuration is documented [on the
-webiste][https://confuse.readthedocs.io/en/latest/usage.html#search-paths]. The application name is `cdk-scripts`, therefore a configuration file
+webiste](https://confuse.readthedocs.io/en/latest/usage.html#search-paths). The application name is `cdk-scripts`, therefore a configuration file
 for linux would be located at `~/.config/cdk-scripts/config.yaml`.
 
 An example configuration file is:
